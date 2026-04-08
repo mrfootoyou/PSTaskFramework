@@ -103,7 +103,16 @@ function Read-Secret {
     }
     $value = Read-Host $Prompt -AsSecureString
     if ($value) {
-        $value = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($value))
+        $bstr = [System.IntPtr]::Zero
+        try {
+            $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($value)
+            $value = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+        }
+        finally {
+            if ($bstr -ne [System.IntPtr]::Zero) {
+                [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+            }
+        }
     }
     if (!$value -and !$AllowEmpty) {
         Write-Error -Exception 'No value provided.' -CategoryActivity 'Read-Secret'
