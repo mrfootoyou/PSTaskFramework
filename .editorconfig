@@ -1,0 +1,34 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+# All files
+[*]
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# JSON files
+[*.{json,jsonc}]
+indent_size = 2
+max_line_length = 100
+
+# YAML files
+[*.{yaml,yml}]
+indent_size = 2
+max_line_length = 100
+
+# Powershell files
+[*.ps1]
+indent_size = 4
+
+# Shell script files
+[*.sh]
+end_of_line = lf
+indent_size = 2
+
+[*.md]
+indent_size = 2
+max_line_length = 100
+# using .prettierrc.yml for proseWrap

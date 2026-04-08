@@ -1,0 +1,35 @@
+{
+  // Use .editorconfig for code style settings. The "EditorConfig for VS Code"
+  // extension automatically applies .editorconfig settings to VS Code.
+  "editor.formatOnSave": false,
+  "editor.defaultFormatter": null,
+  "[json]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[yaml]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[github-actions-workflow]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[powershell]": {
+    "debug.saveBeforeStart": "nonUntitledEditorsInActiveGroup",
+    "editor.semanticHighlighting.enabled": false,
+    "editor.wordSeparators": "`~!@#$%^&*()=+[{]}\\|;:'\",.<>/?",
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-vscode.powershell"
+  },
+  "powershell.scriptAnalysis.enable": true,
+  "files.associations": {}
+}
