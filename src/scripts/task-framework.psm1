@@ -180,7 +180,7 @@ function Get-TaskFrameworkTasks {
     return [TaskDefinition]::GetOrderedTasks().Values
 }
 
-function fixTaskStackTrace {
+function Repair-TaskStackTrace {
     <#
     .DESCRIPTION
         Fixes the stack trace of an error that occurs when invoking a task using
@@ -314,7 +314,7 @@ function Invoke-Task {
         # Since we used Invoke-Expression to execute the task's action, the stack trace will
         # not contain the action's actual filename and line number. Let's fixup the stack
         # trace to include the task action's filename and line number...
-        fixTaskStackTrace -ErrorRecord $_ -Task $Task -TaskActionStartLine 2
+        Repair-TaskStackTrace -ErrorRecord $_ -Task $Task -TaskActionStartLine 2
         throw $_
     }
 
