@@ -67,7 +67,8 @@ function Protect-Secret {
             $secrets.regex = [regex]::new($secrets.values.Keys.foreach{ [regex]::Escape($_) } -join '|')
         }
         if ($secrets.regex) {
-            $secrets.regex.Replace($Message, $Mask)
+            # Use a match-evaluator overload to prevent '$0' from reintroducing the secret value
+            $secrets.regex.Replace($Message, { $Mask })
         }
         else {
             $Message

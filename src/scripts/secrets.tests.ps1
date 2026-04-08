@@ -47,6 +47,14 @@ Describe 'secrets.psm1' {
             $result | Should -Be 'Authorization: [REDACTED]'
         }
 
+        It 'mask with $0 cannot be used to reveal part of the secret' {
+            Push-Secret 'token123'
+
+            $result = Protect-Secret -Message 'Authorization: token123' -Mask '$0'
+
+            $result | Should -Be 'Authorization: $0'
+        }
+
         It 'supports pipeline input for message values' {
             Push-Secret 'topsecret'
 
