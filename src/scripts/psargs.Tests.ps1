@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
-#Requires -Version 7
+#Requires -Version 7.4
 Set-StrictMode -Version Latest
 
 Describe 'psargs.ps1' {
