@@ -71,8 +71,9 @@ $ErrorActionPreference = 'Stop'
 
 # Define the repository root and scripts directory. All tasks will be executed in the
 # context of the repository root ($RepoRoot).
+# Assume this script is located in the repository root.
 $RepoRoot = $PSScriptRoot
-$ScriptsDir = Resolve-Path "$RepoRoot/scripts" -Relative -RelativeBasePath $RepoRoot
+$ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
 # Import the Task Framework and clear any previous state...
 Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false

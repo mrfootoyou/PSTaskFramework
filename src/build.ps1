@@ -21,15 +21,16 @@
 [CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
-    [Parameter(Position = 0, Mandatory)]
+    [Parameter(Position = 0)]
     [ValidateSet(
         'list',
         'bootstrap',
         'version',
-        'clean'
+        'clean',
+        'build'
     )]
     [string[]]
-    $TaskName,
+    $TaskName = @('build'),
 
     # The build configuration to use when executing tasks that support it (e.g. 'build', 'test').
     # Defaults to 'debug'.
@@ -59,8 +60,9 @@ $ErrorActionPreference = 'Stop'
 
 # Define the repository root and scripts directory. All tasks will be executed in the
 # context of the repository root ($RepoRoot).
+# Assume this script is located in the repository root.
 $RepoRoot = $PSScriptRoot
-$ScriptsDir = Resolve-Path "$RepoRoot/scripts" -Relative -RelativeBasePath $RepoRoot
+$ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
 # Import the Task Framework and clear any previous state...
 Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
@@ -196,6 +198,10 @@ Task clean -desc 'Clean the repository' -DependsOn version {
         '--exclude=.env' # never delete .env files since they often contain secrets
     )
     Invoke-Shell -- git clean @cleanArgs
+}
+
+Task build -desc 'Build the project' -dependsOn version {
+    Write-Host 'TODO: Implement build logic.'
 }
 
 ##############################################################
