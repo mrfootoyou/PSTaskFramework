@@ -48,6 +48,9 @@ Install PowerShell: [https://aka.ms/install-powershell](https://aka.ms/install-p
 
 ### Quickstart
 
+The following commands will work immediately after copying the src files, even before you customize
+any tasks. You can remove or edit these example tasks as needed.
+
 From your repo root:
 
 ```powershell
@@ -66,13 +69,18 @@ From your repo root:
 
 ## Core Concepts
 
-Most adopters only need to customize three things:
+Most adopters will only need to interact with `build.ps1` to define tasks and variables. The main
+things to understand when customizing `build.ps1` are:
 
-1. Define tasks.
-2. Define shared task variables.
-3. Optionally define import scripts for frequently used functions.
+1. Understanding tasks.
+2. Understanding shared task variables.
+3. Understanding how to import frequently used scripts.
 
-### 1) Define tasks
+### Understanding tasks
+
+Tasks are the core unit of work in the framework. They are basically just named script blocks that
+can be invoked from the command line, similar to functions. And like functions they can accept
+parameters and arguments. Unlike functions, however, they can depend on other tasks.
 
 Tasks are registered with the `Task` command (an alias for the `Add-TaskFrameworkTask` cmdlet).
 
@@ -93,7 +101,8 @@ Task build -desc 'Compile source' -DependsOn restore {
 }
 ```
 
-It can be invoked with:
+It can be invoked using `./build.ps1 build`, which will first execute the `restore` task, then the
+`build` task. You can also pass a specific version with `./build.ps1 build -- -Version 2.0.0`:
 
 ```powershell
 # use the default version
@@ -105,16 +114,18 @@ It can be invoked with:
 
 Notes:
 
-- Every task must have a unique name.
-- Task names are _not_ case-sensitive: `build` and `Build` refer to the same task.
-- Public tasks should be added to the `$TaskName` parameter's set of valid values.
+- Every task must have a **unique** name.
+- Task names are _not_ case-sensitive: `build` and `Build` refer to the same task and can be used
+  interchangeably.
+- Public tasks should be added to the `$TaskName` parameter's set of valid values, toward the top of
+  the build.ps1 file.
 - Tasks should have a short description (`-desc`) to explain their purpose when listed.
 - Tasks can depend on other tasks (`-DependsOn`), in which case the framework ensures dependencies
   execute first.
 - Task bodies are script blocks that can contain any PowerShell code.
 - Use `param(...)` to define task-specific parameters.
 
-### 2) Define shared task variables
+### Understanding shared task variables
 
 Each task executes in an isolated scope. Tasks have access to all global and automatic PowerShell
 variables, any declared parameters, and all variables declared in the script's `$Variables`
@@ -126,7 +137,8 @@ variables into each task prior to execution. This allows you to define common va
 shared across all tasks, such as the repository root, scripts directory, or any other values that
 tasks may need, such as common input parameters like `$Configuration`.
 
-Here is an example of defining common variables, where `$Configuration` is a main script parameter:
+Here is an example of defining common variables. In this example, `$Configuration` is a top-level
+parameter of the ./build.ps1 script:
 
 ```powershell
 $RepoRoot      = $PSScriptRoot
@@ -135,12 +147,12 @@ $ScriptsDir    = Join-Path $PSScriptRoot 'scripts'
 $Variables = @{
     RepoRoot      = $RepoRoot
     ScriptsDir    = $ScriptsDir
-    Configuration = $Configuration
+    Configuration = $Configuration # <== Make the $Configuration parameter available to all tasks
     # Add more variables here as needed
 }
 ```
 
-Then tasks can reference these variables directly:
+Tasks can then reference these variables directly:
 
 ```powershell
 Task example {
@@ -183,25 +195,26 @@ Notes:
   Be careful when using this pattern, as it can create hidden coupling between tasks, resulting in
   unexpected behavior when dependencies are skipped.
 
-### 3) Define import scripts
+### Define import scripts
 
-Each task is free to import any scripts or modules it needs to accomplish its work. However some
-scripts are used by many tasks resulting in lots of duplication. To avoid this, any scripts listed
-in the `$ImportScripts` array will automatically be imported into each task prior to execution.
+Tasks are free to import any scripts or modules they need to accomplish their work. However
+sometimes we have scripts that are used frequently by many tasks, resulting in lots of duplication.
+To avoid this, any scripts listed in the `$ImportScripts` array will automatically be imported into
+each task prior to execution.
 
 ```powershell
 $ImportScripts = @(
-    Join-Path $ScriptsDir 'build-helpers.ps1' # includes Invoke-Shell
+    Join-Path $ScriptsDir 'build-helpers.ps1' # includes the Invoke-Shell function
     # Add more scripts here as needed
 )
 ```
 
-### 4) Execute tasks and pass task arguments
+### Execute tasks
 
 In the simplest case, you can just run `./build.ps1 <taskName>` to execute a task and its
 dependencies. You can skip dependencies with the `-noDeps` switch: `./build.ps1 <taskName> -noDeps`.
 
-You can also execute multiple tasks by providing multiple task names, separated by commas:
+You can also execute multiple tasks by providing multiple task names separated by commas:
 `./build.ps1 taskA, taskB, taskC`. The framework will execute the tasks in dependency order, or if
 two tasks have no dependencies, in the order in which they were defined in the build script. You can
 also use `-noDeps` to only execute the specified tasks.
@@ -219,17 +232,6 @@ a couple limitations:
    Without the `--`, PowerShell would interpret the second `-v` as a duplicate `-Verbose` argument.
    With the `--`, anything after it is passed directly to the task.
 
-## Boilerplate You Usually Keep
-
-Most repos will want to keep these aspects of `build.ps1` unchanged:
-
-- Importing `task-framework.psm1` and resetting framework state.
-- Declaring `$Variables` and `$ImportScripts` variables. Repos can add properties to these as
-  needed, but the variables themselves are expected by the framework.
-- Calling `Invoke-TaskFramework` once at the end.
-
-What you usually evolve over time is the task list itself.
-
 ## Pitfalls and Troubleshooting
 
 ### Task arguments fail when running multiple tasks
@@ -238,7 +240,7 @@ Symptom:
 
 - You pass task args and multiple task names in the same command.
 
-Why:
+Cause:
 
 - `TaskArgs` are only supported for single-task invocation.
 
@@ -252,7 +254,7 @@ Symptom:
 
 - Runtime error indicates a missing task or missing dependency.
 
-Why:
+Cause:
 
 - A task name in `-TaskName` or `-DependsOn` does not exist.
 
@@ -266,7 +268,7 @@ Symptom:
 
 - Runtime error reports a circular dependency.
 
-Why:
+Cause:
 
 - Two or more tasks depend on each other directly or indirectly.
 
@@ -280,7 +282,7 @@ Symptom:
 
 - Task fails even when the command output looks acceptable.
 
-Why:
+Cause:
 
 - Non-zero exit code was returned and is not in `AllowedExitCodes`.
 
@@ -295,7 +297,7 @@ Symptom:
 
 - Variable exists in `build.ps1` but is missing inside a task.
 
-Why:
+Cause:
 
 - Tasks run in isolated scope and only receive variables imported through `$Variables`.
 
@@ -309,7 +311,7 @@ Symptom:
 
 - Task prompts for input or fails when running non-interactively.
 
-Why:
+Cause:
 
 - CI environments are non-interactive; secret prompts are not reliable there.
 
