@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
+# spell:ignore psargs,targs
 #Requires -Version 7.4
 
 param()
 
-Import-Module (Join-Path $PSScriptRoot 'psargs.psm1') -Force -Verbose:$false
+Import-Module "$PSScriptRoot/psargs.psm1" -Verbose:$false
 
 class TaskDefinition {
     [string]$Name
@@ -123,6 +124,8 @@ function Reset-TaskFramework {
         Resets the state of the task framework by clearing all defined tasks. This can be useful
         to ensure a clean slate when invoking multiple tasks or when reloading the task framework.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Resetting the task framework is a state change, but it is not something that users would typically want to confirm.')]
+    param()
     [TaskDefinition]::Clear()
 }
 
@@ -177,6 +180,8 @@ function Get-TaskFrameworkTasks {
 
         This can be useful for listing available tasks or for debugging task definitions.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Tasks is plural because it manages multiple tasks.')]
+    param()
     return [TaskDefinition]::GetOrderedTasks().Values
 }
 
@@ -275,6 +280,7 @@ function Invoke-Task {
         such as HashTables or lists, can be used to share state across tasks, but be cautious
         of potential side effects.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingInvokeExpression', '', Justification = 'Using Invoke-Expression is necessary to allow task actions to accept named arguments.')]
     param(
         [TaskDefinition]$Task,
         [object[]]$TaskArgs,
@@ -318,7 +324,7 @@ function Invoke-Task {
         throw $_
     }
 
-    if ($Task.AllowedExitCodes.Count -and $global:LASTEXITCODE -notin $Task.AllowedExitCodes) {
+    if ($Task.AllowedExitCodes.Count -gt 0 -and $global:LASTEXITCODE -notin $Task.AllowedExitCodes) {
         Write-Verbose "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
         throw "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
     }
@@ -363,10 +369,6 @@ function Invoke-TaskFramework {
         # pass configuration or state to tasks.
         [hashtable]$Variables = @{},
 
-        # Indicates if the task framework state (defined tasks, etc.) should be reset after invoking
-        # the specified tasks.
-        [switch]$NoResetFramework,
-
         # Indicates that the function should exit the script if a failure occurs. If not specified,
         # the function will throw an exception failure.
         [switch]$ExitOnError
@@ -376,7 +378,7 @@ function Invoke-TaskFramework {
     Write-Verbose "Working directory: '$WorkingDirectory'."
     Push-Location $WorkingDirectory
     try {
-        if ($TaskArgs.Count -and $TaskName.Count -gt 1) {
+        if ($TaskArgs.Count -gt 0 -and $TaskName.Count -gt 1) {
             throw 'Task arguments cannot be used when invoking multiple tasks.'
         }
 
@@ -413,13 +415,11 @@ function Invoke-TaskFramework {
     }
     finally {
         Pop-Location
-
-        if (-not $NoResetFramework) {
-            Reset-TaskFramework
-            Write-Verbose "Reset task framework."
-        }
     }
 }
+
+# reset the task framework state when the module is [force] imported to ensure a clean slate
+Reset-TaskFramework
 
 New-Alias -Name Task -Value Add-TaskFrameworkTask -Force
 

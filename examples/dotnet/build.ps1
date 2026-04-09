@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
+# spell:ignore winget,choco,opencover,reportgenerator,reportgenerator-globaltool
 #Requires -Version 7.4
 <#
 .SYNOPSIS
@@ -19,6 +20,7 @@
     Executes the 'test' task without executing its dependencies.
 #>
 [CmdletBinding(PositionalBinding = $false)]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
 param (
     # The name of the task(s) to execute.
     [Parameter(Position = 0)]
@@ -177,7 +179,7 @@ Task bootstrap -desc 'Installs required tools' {
 }
 
 Task version -desc 'Display tool versions' {
-    [pscustomobject]@{
+    [PSCustomObject]@{
         '.NET SDK'    = Invoke-Shell -NoEcho -- dotnet --version
         'PowerShell'  = $PSVersionTable.PSVersion
         'OS Platform' = "$($PSVersionTable.OS) ($($PSVersionTable.Platform))"
@@ -445,8 +447,8 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
     if ($ReportType) {
         $reportArgs = @(
             "-reports:$coverageReports"
-            "-reporttypes:$($ReportType -join ',')"
-            "-targetdir:$OutputDir"
+            "-reportTypes:$($ReportType -join ',')"
+            "-targetDir:$OutputDir"
         )
         Invoke-Shell -- dotnet reportgenerator @reportArgs
     }
@@ -482,7 +484,7 @@ Task package -desc 'Package the project' -dependsOn build {
     param(
         # The package version.
         [string]$Version,
-        # Optional path to the project to package. If not specified, all packagable projects will be packaged.
+        # Optional path to the project to package. If not specified, all packable projects will be packaged.
         [string]$TargetProject,
         # The output directory for the package(s). Defaults to "artifacts/package/$Configuration".
         [string]$OutputDir = "artifacts/package/$($Configuration.ToLower())"
@@ -528,7 +530,7 @@ Task push -desc 'Push packages to NuGet.org' -dependsOn package {
         # Defaults to "artifacts/package/$Configuration/*.nupkg"
         [string[]]$PackagePath = @("artifacts/package/$($Configuration.ToLower())/*.nupkg")
     )
-    Import-Module "$RepoRoot/scripts/secrets.psm1" -Verbose:$false -Scope Local
+    Import-Module "$RepoRoot/scripts/secrets.psm1" -Verbose:$false
 
     if ($Configuration -ne 'release') {
         throw "Must not push $Configuration build!"

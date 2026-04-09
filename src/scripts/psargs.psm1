@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
+# spell:ignore pscustomobject,splatable
 #Requires -Version 7.4
 
 function ConvertTo-PSString {

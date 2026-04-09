@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
+# spell:ignore bstr
 #Requires -Version 7.4
 
 $secrets = [PSCustomObject]@{
@@ -32,6 +33,7 @@ function Pop-Secret {
     .DESCRIPTION
         Unregisters a secret value previously registered with Push-Secret.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSPossibleIncorrectUsageOfAssignmentOperator', '', Justification = 'Intended to be used this way.')]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline)]
         [string]$s
@@ -55,6 +57,7 @@ function Protect-Secret {
     #>
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedParameter', 'Mask', Justification = 'Not unused.')]
     param (
         [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
         [AllowEmptyString()]

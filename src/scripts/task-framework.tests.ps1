@@ -1,14 +1,18 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
 #Requires -Version 7.4
+
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
+param()
+
 Set-StrictMode -Version Latest
 
 Describe 'task-framework.psm1' {
     BeforeAll {
         $modulePath = Join-Path $PSScriptRoot 'task-framework.psm1'
-        Import-Module $modulePath -Force
+        Import-Module $modulePath -Force -Scope Local
 
-        Mock -CommandName 'Write-Host' -MockWith { } -ModuleName 'task-framework' -Verbose:$false
+        Mock -CommandName 'Write-Host' -MockWith { } -ModuleName 'task-framework'
     }
 
     BeforeEach {
@@ -18,13 +22,12 @@ Describe 'task-framework.psm1' {
     }
 
     AfterAll {
-        Remove-Module -Name 'task-framework' -ErrorAction Ignore
+        Remove-Module -Name task-framework -ErrorAction Ignore
     }
 
     It 'fails when no tasks are specified' {
         { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'foo' } | Should -Throw "Task 'foo' not found."
         $global:LASTEXITCODE | Should -Be -1
-        $Error[0].Exception.Message | Should -Match 'Task.*not found'
     }
 
     It 'registers and executes tasks via Add-TaskFrameworkTask and Task alias' {
@@ -152,24 +155,13 @@ function Get-Message {
         $global:LASTEXITCODE | Should -Be 0
     }
 
-    It 'resets framework state by default after invocation' {
+    It 'does not reset framework state after invocation' {
         Task 'run-once' {}
 
         Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('run-once')
-        { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('run-once') } | Should -Throw "Task 'run-once' not found."
+        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('run-once')
 
-        $global:LASTEXITCODE | Should -Be -1
-    }
-
-    It 'keeps framework state when NoResetFramework is specified' {
-        $shared = [ordered]@{ Count = 0 }
-
-        Task 'persist' { $Shared.Count++ }
-
-        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('persist') -NoResetFramework -Variables @{ Shared = $shared }
-        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('persist') -NoResetFramework -Variables @{ Shared = $shared }
-
-        $shared.Count | Should -Be 2
+        $global:LASTEXITCODE | Should -Be 0
     }
 
     It 'fails when dependency is missing' {

@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
 #Requires -Version 7.4
+
+[Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'test code')]
+param()
+
 Set-StrictMode -Version Latest
 
 Describe 'secrets.psm1' {
     BeforeEach {
         $modulePath = Join-Path $PSScriptRoot 'secrets.psm1'
-        Remove-Module -Name secrets -ErrorAction Ignore
         Import-Module $modulePath -Force
 
         $script:previousCi = $env:CI
@@ -28,7 +31,7 @@ Describe 'secrets.psm1' {
         It 'returns the input unchanged when no secrets are registered' {
             $result = Protect-Secret -Message 'hello world'
 
-            $result | Should -Be 'hello world'
+            $result | Should -BeExactly 'hello world'
         }
 
         It 'masks registered secrets with the default mask' {
@@ -36,7 +39,7 @@ Describe 'secrets.psm1' {
 
             $result = Protect-Secret -Message 'Authorization: token123'
 
-            $result | Should -Be 'Authorization: ****'
+            $result | Should -BeExactly 'Authorization: ****'
         }
 
         It 'uses a custom mask when provided' {
@@ -44,7 +47,7 @@ Describe 'secrets.psm1' {
 
             $result = Protect-Secret -Message 'Authorization: token123' -Mask '[REDACTED]'
 
-            $result | Should -Be 'Authorization: [REDACTED]'
+            $result | Should -BeExactly 'Authorization: [REDACTED]'
         }
 
         It 'mask with $0 cannot be used to reveal part of the secret' {
@@ -52,15 +55,15 @@ Describe 'secrets.psm1' {
 
             $result = Protect-Secret -Message 'Authorization: token123' -Mask '$0'
 
-            $result | Should -Be 'Authorization: $0'
+            $result | Should -BeExactly 'Authorization: $0'
         }
 
         It 'supports pipeline input for message values' {
-            Push-Secret 'topsecret'
+            Push-Secret 'top secret'
 
-            $result = 'a topsecret value' | Protect-Secret
+            $result = 'a top secret value' | Protect-Secret
 
-            $result | Should -Be 'a **** value'
+            $result | Should -BeExactly 'a **** value'
         }
 
         It 'honors push and pop reference counting' {
@@ -73,8 +76,8 @@ Describe 'secrets.psm1' {
             Pop-Secret 'shared-secret'
             $unmasked = Protect-Secret -Message 'shared-secret'
 
-            $stillMasked | Should -Be '****'
-            $unmasked | Should -Be 'shared-secret'
+            $stillMasked | Should -BeExactly '****'
+            $unmasked | Should -BeExactly 'shared-secret'
         }
 
         It 'rejects empty secret values' {
@@ -88,8 +91,8 @@ Describe 'secrets.psm1' {
             'pipelined-secret' | Pop-Secret
             $unmasked = Protect-Secret -Message 'pipelined-secret'
 
-            $masked | Should -Be '****'
-            $unmasked | Should -Be 'pipelined-secret'
+            $masked | Should -BeExactly '****'
+            $unmasked | Should -BeExactly 'pipelined-secret'
         }
     }
 
@@ -100,7 +103,7 @@ Describe 'secrets.psm1' {
             $warnings = @()
             $result = Read-Secret -Prompt 'Enter value' -AllowEmpty -WarningVariable warnings -WarningAction SilentlyContinue
 
-            $result | Should -Be ''
+            $result | Should -BeExactly ''
             ($warnings -join ' ') | Should -Match 'CI environment detected'
         }
 
@@ -117,7 +120,7 @@ Describe 'secrets.psm1' {
 
             $result = Read-Secret -Prompt 'Enter value'
 
-            $result | Should -Be 'my-secret'
+            $result | Should -BeExactly 'my-secret'
             Should -Invoke -CommandName Read-Host -ModuleName secrets -Times 1 -Exactly
         }
 
@@ -136,7 +139,7 @@ Describe 'secrets.psm1' {
 
             $result = Read-Secret -Prompt 'Enter value' -AllowEmpty
 
-            $result | Should -Be ''
+            $result | Should -BeExactly ''
         }
     }
 }

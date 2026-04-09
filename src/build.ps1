@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
+# spell:ignore winget,choco
 #Requires -Version 7.4
 <#
 .SYNOPSIS
@@ -18,6 +19,7 @@
     PS> .\build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
 [CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
@@ -127,8 +129,8 @@ Task bootstrap -desc 'Installs required tools' {
         manually.
     #>
     param()
-    $wingetPackageIds = @('Git.Git') # WinGet package IDs. See `winget search <appname>`.
-    $chocoPackageIds = @('git') # Chocolatey package IDs. See `choco search <appname>`.
+    $wingetPackageIds = @('Git.Git') # WinGet package IDs. See `winget search <app-name>`.
+    $chocoPackageIds = @('git') # Chocolatey package IDs. See `choco search <app-name>`.
 
     $installed = $false
 
@@ -164,7 +166,7 @@ Task bootstrap -desc 'Installs required tools' {
 }
 
 Task version -desc 'Display tool versions' {
-    [pscustomobject]@{
+    [PSCustomObject]@{
         'PowerShell'  = $PSVersionTable.PSVersion
         'OS Platform' = "$($PSVersionTable.OS) ($($PSVersionTable.Platform))"
         'RepoRoot'    = $RepoRoot

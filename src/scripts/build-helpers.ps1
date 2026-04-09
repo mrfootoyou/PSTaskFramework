@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
+# spell:ignore psargs
 #Requires -Version 7.4
 
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingPositionalParameters', 'Invoke-Shell', Justification = 'Invoke-Shell is intended to be used with positional parameters.')]
 param()
 
-Import-Module (Join-Path $PSScriptRoot 'secrets.psm1') -Force -Verbose:$false
-Import-Module (Join-Path $PSScriptRoot 'psargs.psm1') -Force -Verbose:$false
+Import-Module "$PSScriptRoot/secrets.psm1" -Verbose:$false
+Import-Module "$PSScriptRoot/psargs.psm1" -Verbose:$false
 
 $RepoRoot ??= Split-Path $PSScriptRoot -Parent
 
