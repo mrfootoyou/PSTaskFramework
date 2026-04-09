@@ -1,0 +1,310 @@
+# SPDX-License-Identifier: Unlicense
+# Source: http://github.com/mrfootoyou/pstaskframework
+# spell:ignore winget,choco,pester,sarif,nunit,psargs,pshelpers
+#Requires -Version 7.4
+
+[CmdletBinding(PositionalBinding = $false)]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
+param (
+    # The name of the task(s) to execute.
+    [Parameter(Position = 0)]
+    [ValidateSet(
+        'list',
+        'bootstrap',
+        'version',
+        'clean',
+        'test',
+        'analysis'
+    )]
+    [string[]]
+    $TaskName = @('test', 'analysis'),
+
+    [Parameter(ValueFromRemainingArguments)]
+    [object[]] $TaskArgs,
+
+    [Alias("noDeps")]
+    [switch] $SkipDependencies
+)
+$ErrorActionPreference = 'Stop'
+
+$RepoRoot = $PSScriptRoot
+$ScriptsDir = Convert-Path "$RepoRoot/src/scripts"
+$PSModuleVersions = @{
+    Pester           = '5.7.1'
+    PSScriptAnalyzer = '1.25.0'
+    ConvertToSARIF   = '1.0.0'
+}
+
+Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
+
+$Variables = @{
+    RepoRoot         = $RepoRoot
+    ScriptsDir       = $ScriptsDir
+    PSModuleVersions = $PSModuleVersions
+    # Add more variables here as needed
+}
+
+# These scripts will be imported into each task prior to execution.
+$ImportScripts = @(
+    Join-Path $ScriptsDir 'build-helpers.ps1'
+    # Add more scripts here as needed
+)
+
+####################################################################################
+# Define all tasks
+####################################################################################
+
+Task list -desc 'List all tasks' {
+    Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
+}
+
+Task bootstrap -desc 'Installs required tools' {
+    <#
+    .DESCRIPTION
+        Installs required tools for development, such as PowerShell modules.
+
+        This task should be run at least once before running any other tasks to ensure
+        that all required tools are installed.
+
+        The specific tools that are installed may change over time as the repository
+        evolves, but currently this includes the Pester and PSScriptAnalyzer modules.
+    #>
+    param()
+
+    Write-Host 'Checking required PowerShell modules...'
+    function installIfNeeded([string]$ModuleName) {
+        $minimumVersion = [version]$PSModuleVersions[$ModuleName]
+        $installed = (
+            Get-Module -Name $ModuleName -ListAvailable -ea Ignore |
+            Where-Object Version -ge $minimumVersion
+        )
+        if ($installed) {
+            Write-Host "$ModuleName $($installed.Version) is installed." -ForegroundColor Green
+        }
+        else {
+            Write-Host "Installing $ModuleName $minimumVersion (or greater)..."
+            Install-Module -Name $ModuleName -MinimumVersion $minimumVersion -Scope CurrentUser -Force
+            Write-Host "$ModuleName $($installed.Version) was installed." -ForegroundColor Green
+        }
+    }
+    foreach ($module in $PSModuleVersions.Keys) {
+        installIfNeeded $module
+    }
+
+    Write-Host 'Install latest PowerShell from https://aka.ms/powershell' -ForegroundColor Magenta
+}
+
+Task version -desc 'Display tool versions' {
+    [PSCustomObject]@{
+        'PowerShell'  = $PSVersionTable.PSVersion
+        'OS Platform' = "$($PSVersionTable.OS) ($($PSVersionTable.Platform))"
+        'RepoRoot'    = $RepoRoot
+    } | Format-List
+}
+
+Task clean -desc 'Clean the repository' -DependsOn version {
+    <#
+    .DESCRIPTION
+        Cleans the repository using 'git clean'. By default it will run in interactive mode,
+        prompting the user to confirm which files to delete. To skip the confirmation prompt,
+        use the -Force switch.
+
+        By default this uses 'git clean -X' to remove all untracked files that are
+        ignored by git (e.g. build outputs, .vs folders, etc). This is typically safer since
+        it leaves behind untracked files that are _not_ ignored by git, such as new source files.
+
+        If you want to remove all untracked files, including those not ignored by git, use
+        the -Pristine switch to run 'git clean -x' instead.
+    #>
+    param(
+        # If specified, will run 'git clean -x' instead of 'git clean -X'
+        [switch]$Pristine,
+        # If specified, will skip the confirmation prompt and run 'git clean' with the -force option.
+        [switch]$Force
+    )
+    $cleanArgs = @(
+        '-d' # remove untracked directories in addition to untracked files
+        ($Pristine ? '-x' : '-X')
+        ($Force ? '--force' : '--interactive')
+        '--exclude=.env' # never delete .env files since they often contain secrets
+    )
+    Invoke-Shell -- git clean @cleanArgs
+}
+
+Task test -desc 'Execute tests' -dependsOn version {
+    <#
+    .DESCRIPTION
+        Executes all Pester tests in the repo and optionally collect code coverage.
+    .EXAMPLE
+        PS> ./build.ps1 test
+        Run all Pester tests in the repo.
+    .EXAMPLE
+        PS> ./build.ps1 test -TestReport -CoverageReport
+        Run all Pester tests in the repo and generate a NUnit XML report and a
+        Cobertura code coverage report.
+    #>
+    param(
+        # Optional list of test filters to apply. Each is a wildcard pattern
+        # used to match test names.
+        [string[]] $TestFilter,
+        # Indicates that a test report should be written to
+        # "./artifacts/results/nunit.xml" in NUnit XML format.
+        [switch] $TestReport,
+        # Indicates that a code coverage report should be written to
+        # "./artifacts/results/coverage.cobertura.xml" in Cobertura XML format.
+        [switch] $CoverageReport,
+        # Return result object to the pipeline after finishing the test run.
+        [switch] $PassThru,
+        # If specified, will set the Pester output verbosity to "Detailed" to
+        # include more information about each test in the console output.
+        [switch] $Verbose
+    )
+
+    $ReportPath = './artifacts/results/nunit.xml'
+    $CoverageOutputPath = './artifacts/results/coverage.cobertura.xml'
+
+    if (!(Import-Module 'Pester' -MinimumVersion $PSModuleVersions['Pester'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
+        throw 'Pester module is not installed. Run the "bootstrap" task to install required tools.'
+    }
+
+    # Using a hashtable to construct the configuration object so that we can
+    # log the configuration ([PesterConfiguration] does not support logging).
+    # $configuration = New-PesterConfiguration
+    $configuration = @{}
+    $configuration.Run = @{}
+    $configuration.Run.Path = $ScriptsDir # excludes build.ps1
+    $configuration.Run.PassThru = $PassThru.IsPresent
+    $configuration.Output = @{}
+    $configuration.Output.Verbosity = $Verbose ? 'Detailed' : 'Normal'
+    if ($TestFilter) {
+        $configuration.Filter = @{}
+        $configuration.Filter.FullName = $TestFilter # apply test filters if specified
+    }
+    if ($TestReport) {
+        Remove-Item $ReportPath -ErrorAction Ignore
+        $configuration.TestResult = @{}
+        $configuration.TestResult.Enabled = $true
+        $configuration.TestResult.OutputPath = $ReportPath
+        $configuration.TestResult.OutputFormat = 'NUnitXml'
+        $configuration.TestResult.TestSuiteName = 'PowerShell Tests'
+    }
+    if ($CoverageReport) {
+        Remove-Item $CoverageOutputPath -ErrorAction Ignore
+        $configuration.CodeCoverage = @{}
+        $configuration.CodeCoverage.Enabled = $true
+        $configuration.CodeCoverage.OutputPath = $CoverageOutputPath
+        $configuration.CodeCoverage.OutputFormat = 'Cobertura'
+        $configuration.CodeCoverage.CoveragePercentTarget = 75
+    }
+
+    # Run tests within a temporary module (private session) to prevent the
+    # TaskFramework tests from clobbering the current TaskFramework state.
+    $tempModule = New-Module -ScriptBlock {
+        Import-Module Pester
+        Export-ModuleMember -Function Invoke-Pester
+    }
+
+    Write-Host "$($PSStyle.Dim)>> Invoke-Pester -Configuration $(ConvertTo-PSString $configuration)"
+    & $tempModule Invoke-Pester -Configuration $configuration -ErrorAction Stop
+
+    if ($TestReport -and (Test-Path $ReportPath)) {
+        Write-Host "Test report: '$ReportPath'." -ForegroundColor Green
+    }
+
+    # Pester always sets LASTEXITCODE to the number of failed tests.
+    if ($global:LASTEXITCODE -gt 0) {
+        throw "$global:LASTEXITCODE tests failed."
+    }
+
+    if ($CoverageReport -and (Test-Path $CoverageOutputPath)) {
+        Write-Host "Coverage report: '$CoverageOutputPath'." -ForegroundColor Green
+    }
+}
+
+Task analysis -desc 'Execute analysis' -dependsOn version {
+    <#
+    .DESCRIPTION
+        Run PSScriptAnalyzer on the repo.
+
+        This will check for common issues in PowerShell scripts and modules.
+
+        The results will be output to the console and, if specified, to a SARIF report
+        which can be used to integrate with other tools, such as GitHub Actions.
+
+        The script will set the LASTEXITCODE to the number of issues found (0 or more).
+    .EXAMPLE
+        PS> ./build.ps1 analysis
+        Run PSScriptAnalyzer on the repo.
+    .EXAMPLE
+        PS> ./build.ps1 analysis -CreateSarifReport
+        Run PSScriptAnalyzer on the repo and generate a SARIF report.
+    #>
+    param(
+        # Indicates that a SARIF report should be written to "./artifacts/results/analysis.sarif".
+        [switch] $CreateSarifReport,
+        # Whether to automatically fix issues found by PSScriptAnalyzer.
+        [switch] $Fix
+    )
+    $SarifPath = './artifacts/results/analysis.sarif'
+
+    if (!(Import-Module 'PSScriptAnalyzer' -MinimumVersion $PSModuleVersions['PSScriptAnalyzer'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
+        throw 'PSScriptAnalyzer module is not installed. Run the "bootstrap" task to install required tools.'
+    }
+    if (!(Get-Command 'Invoke-ScriptAnalyzer' -ea Ignore)) {
+        # This is known to happen in the VSCode integrated terminal, possibly
+        # due to a conflict with the the VSCode PowerShell extension.
+        # Running the script in a different console window seems to fix it.
+        throw "PSScriptAnalyzer is not available. Try again in a different console window."
+    }
+
+    if ($CreateSarifReport) {
+        if (!(Import-Module 'ConvertToSARIF' -MinimumVersion $PSModuleVersions['ConvertToSARIF'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
+            throw 'ConvertToSARIF module is not installed. Run the "bootstrap" task to install required tools.'
+        }
+    }
+
+    # run PSScriptAnalyzer...
+    $saArgs = [ordered]@{
+        Path     = '.'
+        Recurse  = $true
+        Settings = './PSScriptAnalyzerSettings.psd1'
+        Fix      = $Fix.IsPresent
+    }
+    Write-Host "$($PSStyle.Dim)>> Invoke-ScriptAnalyzer $(ConvertTo-CommandArgs $saArgs)"
+    $results = Invoke-ScriptAnalyzer @saArgs
+    $results | Out-Host
+
+    if ($CreateSarifReport) {
+        if (!(Test-Path (Split-Path $SarifPath))) {
+            $null = New-Item (Split-Path $SarifPath) -ItemType Directory -Force
+        }
+
+        Write-Host "$($PSStyle.Dim)>> ConvertTo-SARIF -FilePath $(ConvertTo-CommandArgs $SarifPath)"
+        $results | ConvertTo-SARIF -FilePath $SarifPath
+        Write-Host "SARIF report saved to '$SarifPath'." -ForegroundColor Green
+    }
+
+    # Always set the global LASTEXITCODE to the number of issues found.
+    $global:LASTEXITCODE = $results.Count
+
+    $resultMsg = "PSScriptAnalyzer found $($results.Count) issue(s)."
+    if ($results.Count -gt 0) {
+        throw $resultMsg
+    }
+    Write-Host $resultMsg -ForegroundColor Green
+}
+
+##############################################################
+# Execute the specified task(s) with the Task Framework. See
+# the documentation for Invoke-TaskFramework for more details.
+##############################################################
+
+Invoke-TaskFramework `
+    -TaskName $TaskName `
+    -TaskArgs $TaskArgs `
+    -SkipDependencies:$SkipDependencies `
+    -WorkingDirectory $RepoRoot `
+    -Variables $Variables `
+    -ImportScripts $ImportScripts `
+    -ExitOnError `
+    -Verbose:($VerbosePreference -eq 'Continue')
