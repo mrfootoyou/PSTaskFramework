@@ -19,8 +19,8 @@
     PS> .\build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
 #>
-[CmdletBinding(PositionalBinding = $false)]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
+[CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
     [Parameter(Position = 0)]
@@ -77,23 +77,13 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
 $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
-# Import the Task Framework and clear any previous state...
-Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
-Reset-TaskFramework
-
 ####################################################################################
 # Define tasks variables
-#
-# Each task is executed in an isolated scope, meaning they only have access to
-# global variables and variables defined in the $Variables dictionary.
-#
+####################################################################################
 # The properties of the $Variables dictionary will be imported as variables
 # into each task prior to execution. This allows you to define common variables that
 # are shared across all tasks, such as the repository root, scripts directory, or any
 # other values that tasks may need, such as input parameters like $Configuration.
-#
-# The $Variables dictionary itself is available to all tasks, enabling tasks to
-# pass information to subsequent tasks.
 #
 # The following variables are always available:
 # - $Task: The currently executing task definition.
@@ -118,6 +108,7 @@ $ImportScripts = @(
 ####################################################################################
 # Define all tasks
 ####################################################################################
+Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -154,6 +145,7 @@ Task bootstrap -desc 'Installs required tools' {
             0x8A15002B # No applicable update found
         )
         Invoke-Shell -AllowedExitCodes $allowedExitCodes -- WinGet install @wingetPackageIds --exact --accept-package-agreements --accept-source-agreements
+        $global:LASTEXITCODE = 0
         $installed = $true
     }
 
@@ -185,6 +177,35 @@ Task version -desc 'Display tool versions' {
         'OS Platform' = "$($PSVersionTable.OS) ($($PSVersionTable.Platform))"
         'RepoRoot'    = $RepoRoot
     } | Format-List
+}
+
+Task clean -desc 'Clean the repository' -DependsOn version {
+    <#
+    .DESCRIPTION
+        Cleans the repository using 'git clean'. By default it will run in interactive mode,
+        prompting the user to confirm which files to delete. To skip the confirmation prompt,
+        use the -Force switch.
+
+        By default this uses 'git clean -X' to remove all untracked files that are
+        ignored by git (e.g. build outputs, .vs folders, etc). This is typically safer since
+        it leaves behind untracked files that are _not_ ignored by git, such as new source files.
+
+        If you want to remove all untracked files, including those not ignored by git, use
+        the -Pristine switch to run 'git clean -x' instead.
+    #>
+    param(
+        # If specified, will run 'git clean -x' instead of 'git clean -X'
+        [switch]$Pristine,
+        # If specified, will skip the confirmation prompt and run 'git clean' with the -force option.
+        [switch]$Force
+    )
+    $cleanArgs = @(
+        '-d' # remove untracked directories in addition to untracked files
+        ($Pristine ? '-x' : '-X')
+        ($Force ? '--force' : '--interactive')
+        '--exclude=.env' # never delete .env files since they often contain secrets
+    )
+    Invoke-Shell -- git clean @cleanArgs
 }
 
 Task updateTools -desc 'Update .NET tools' -DependsOn version {
@@ -244,35 +265,6 @@ Task updatePackages -desc 'Update .NET packages' -DependsOn version {
 
 Task updateRepo -desc 'Update the repository tools and packages' -DependsOn bootstrap, updateTools, updatePackages, initGit {
     # This is a aggregate task that runs all tasks to keep the repository up to date.
-}
-
-Task clean -desc 'Clean the project' -DependsOn version {
-    <#
-    .DESCRIPTION
-        Cleans the repository using 'git clean'. By default it will run in interactive mode,
-        prompting the user to confirm which files to delete. To skip the confirmation prompt,
-        use the -Force switch.
-
-        By default this uses 'git clean -X' to remove all untracked files that are
-        ignored by git (e.g. build outputs, .vs folders, etc). This is typically safer since
-        it leaves behind untracked files that are _not_ ignored by git, such as new source files.
-
-        If you want to remove all untracked files, including those not ignored by git, use
-        the -Pristine switch to run 'git clean -x' instead.
-    #>
-    param(
-        # If specified, will run 'git clean -x' instead of 'git clean -X'
-        [switch]$Pristine,
-        # If specified, will skip the confirmation prompt and run 'git clean' with the -force option.
-        [switch]$Force
-    )
-    $cleanArgs = @(
-        '-d' # remove untracked directories in addition to untracked files
-        ($Pristine ? '-x' : '-X')
-        ($Force ? '--force' : '--interactive')
-        '--exclude=.env' # never delete .env files since they often contain secrets
-    )
-    Invoke-Shell -- git clean @cleanArgs
 }
 
 Task format -desc 'Format the code' -DependsOn restoreTools {
