@@ -51,6 +51,10 @@ param (
     [string]
     $Configuration = 'debug',
 
+    # The version to use when executing tasks that support it (e.g. 'build', 'package').
+    [string]
+    $Version,
+
     # Task-specific arguments for the task specified in -TaskName.
     # Cannot be used when -TaskName contains multiple tasks.
     # Arguments are _not_ passed to dependencies of the specified task.
@@ -96,6 +100,7 @@ $Variables = @{
     RepoRoot      = $RepoRoot
     ScriptsDir    = $ScriptsDir
     Configuration = $Configuration
+    Version       = $Version
     # Add more variables here as needed
 }
 
@@ -297,33 +302,22 @@ Task format -desc 'Format the code' -DependsOn restoreTools {
     Invoke-Shell -- dotnet csharpier @csharpierArgs
 }
 
-Task build -desc 'Build the project' -dependsOn restore {
+Task build -desc 'Build the solution' -dependsOn restore {
     <#
     .DESCRIPTION
-        Builds the project using 'dotnet build'.
-
-        By default, it builds all projects in the repository. You can specify a single project
-        to build using the -TargetProject parameter.
+        Builds the solution using 'dotnet build'.
 
         The build configuration can be specified using the -Configuration parameter (e.g.
-        'debug' or 'release'). When building release builds, the version must be specified
-        using the -Version parameter. For non-release builds the version is optional.
+        'debug' or 'release'). A build version can be specified using the -Version parameter.
     .EXAMPLE
         PS> .\build.ps1 build
-        Builds the debug configuration of all projects in the repository.
+        Builds the debug configuration of the solution.
     .EXAMPLE
-        PS> .\build.ps1 build -Configuration Release -TargetProject ./src/LeaderElection.S3 -Version 1.2.3
-        Builds the release configuration of the specified project with version 1.2.3.
+        PS> .\build.ps1 build -Configuration Release -Version 1.2.3
+        Builds the release configuration assigning it version 1.2.3.
     #>
-    param(
-        # The package version to use when building. This is only required for release builds,
-        # but can be specified for non-release builds as well.
-        [string]$Version,
-        # Optional path to the project to build. If not specified, all projects will be built.
-        [string]$TargetProject
-    )
+    param()
     $buildArgs = @(
-        if ($TargetProject) { $TargetProject }
         '--configuration', $Configuration
         '--no-restore'
         if ($Version) { "-p:Version=$Version" }
@@ -450,39 +444,38 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
     }
 }
 
-Task package -desc 'Package the project' -dependsOn build {
+Task package -desc 'Package the solution' -dependsOn build {
     <#
     .DESCRIPTION
-        Packages the project into NuGet packages using 'dotnet pack'.
+        Packages the solution into NuGet packages using 'dotnet pack'.
 
-        By default, it will package all projects that can be packaged. You can specify
-        a single project to package using the -TargetProject parameter.
+        By default, it will package all packable projects in the solution. You can specify
+        a specific project using the -TargetProject parameter.
 
-        The output packages will be placed in the "artifacts/package/$Configuration"
+        The output packages will be placed in the "artifacts/package/$configuration"
         directory by default, but you can specify a different output directory using
         the -OutputDir parameter.
 
         When packaging release builds, the version must be specified using the -Version
         parameter. For non-release builds, the version is optional and will default to
-        whatever version is specified in the .csproj file(s).
+        whatever version is specified in the .csproj file(s), usually 1.0.0.
     .EXAMPLE
         PS> .\build.ps1 package
-        Packages all package-able projects in the repository using the Debug configuration
-        using the default version.
+        Build and package all packable projects in the solution using the Debug
+        configuration and default version.
     .EXAMPLE
-        PS> .\build.ps1 package -TargetProject ./src/LeaderElection.S3 -Version 1.2.3
-        Packages the specified project with version 1.2.3.
+        PS> .\build.ps1 package -Version 1.2.3 -TargetProject ./src/MyProject/
+        Build and package the specified project as version 1.2.3.
     #>
     param(
-        # The package version.
-        [string]$Version,
-        # Optional path to the project to package. If not specified, all packable projects will be packaged.
+        # Optional path to the project to package. If not specified, all packable projects
+        # in the solution will be packaged.
         [string]$TargetProject,
-        # The output directory for the package(s). Defaults to "artifacts/package/$Configuration".
+        # The output directory for the package(s). Defaults to "artifacts/package/$configuration".
         [string]$OutputDir = "artifacts/package/$($Configuration.ToLower())"
     )
     if ($Configuration -eq 'release' -and -not $Version) {
-        throw 'Version must be specified when packaging release builds.'
+        throw 'Version must be specified when packing release builds.'
     }
     if ($Configuration -ne 'release') {
         Write-Warning "Packaging $Configuration build! It's recommended to only package Release builds."
@@ -498,46 +491,81 @@ Task package -desc 'Package the project' -dependsOn build {
     Invoke-Shell -- dotnet pack @packArgs
 }
 
-Task push -desc 'Push packages to NuGet.org' -dependsOn package {
+Task push -desc 'Push NuGet packages' -dependsOn version {
     <#
     .DESCRIPTION
-        Pushes NuGet packages to NuGet.org.
+        Pushes the specified NuGet packages to the configured NuGet source.
 
-        By default it pushes all .nupkg files in the "artifacts/package/$Configuration"
-        directory. You can specify a different set of packages to push using the -PackagePath
-        parameter.
+        Note: This task requires the packages to have already been created (see
+        the 'package' task).
     .EXAMPLE
-        PS> .\build.ps1 push -Configuration Release -NoDeps
-        Pushes previously built packages in the "artifacts/package/release" directory to
-        NuGet.org, prompting for the API key if not set via the NUGET_API_KEY environment variable.
+        PS> ./build.ps1 push ./artifacts/package/release
+        Push all packages in the specified folder to the default NuGet source,
+        prompting for the API key if not set via the NUGET_API_KEY environment variable.
     .EXAMPLE
-        PS> .\build.ps1 push -Configuration Release -PackagePath "artifacts/package/release/MyPackage.1.2.3.nupkg" -ApiKey $secretKey
-        Pushes the specified package to NuGet.org using the specified API key.
+        PS> ./build.ps1 push ./artifacts/package/release/MyPackage.1.2.3.nupkg -ApiKey $secretKey
+        Push the specified package using the specified API key.
     #>
+    [CmdletBinding(PositionalBinding = $false)]
     param(
+        # The path(s) to the package(s) to push. Can be a single path (file or directory)
+        # or an array of paths.
+        [Parameter(Mandatory, Position = 0)]
+        [string[]]$PackagePath,
         # The API key to use when pushing packages. Defaults to the NUGET_API_KEY
         # environment variable. If not set, the user will be prompted for the API key.
         [string]$ApiKey = $env:NUGET_API_KEY,
-        # The path(s) to the package(s) to push. Can be a single path or an array of paths.
-        # Defaults to "artifacts/package/$Configuration/*.nupkg"
-        [string[]]$PackagePath = @("artifacts/package/$($Configuration.ToLower())/*.nupkg")
+        # Url or source name of the target NuGet registry. Defaults to the configured
+        # `DefaultPushSource` if any, otherwise NuGet.org.
+        [string]$NugetSource = $null
     )
-    Import-Module "$RepoRoot/scripts/secrets.psm1" -Verbose:$false
 
-    if ($Configuration -ne 'release') {
-        throw "Must not push $Configuration build!"
+    $PackagePath = $PackagePath.foreach{
+        $package = $_
+        if (Test-Path $package -PathType Container) {
+            $package = Join-Path $package '*.nupkg'
+        }
+        if (!(Test-Path $package -PathType Leaf)) {
+            throw "Package not found: '$package'."
+        }
+        $package
     }
-    if (-not $ApiKey) {
-        $ApiKey = Read-Secret "Enter API key for pushing packages to NuGet.org (or set the NUGET_API_KEY environment variable to avoid this prompt)"
+
+    $NugetSourceName = $null
+    if (!$NugetSource) {
+        # is there a default push source configured...
+        $dps = Invoke-Shell -noEcho -ea Ignore -- dotnet nuget config get DefaultPushSource 2>&1
+        if ($global:LASTEXITCODE -eq 0) {
+            $NugetSource = $dps.Trim()
+        }
+        else {
+            Write-Host 'No default NuGet push source configured. Defaulting to NuGet.org.' -ForegroundColor Yellow
+            $NugetSource = 'https://api.nuget.org/v3/index.json'
+            $NugetSourceName = 'NuGet.org'
+        }
     }
-    $pushArgs = @(
-        [System.IO.Path]::GetFullPath($PackagePath)
-        '--source', 'https://api.nuget.org/v3/index.json'
-        '--api-key', $ApiKey
+    $NugetSourceName ??= (
+        [uri]::IsWellFormedUriString($NugetSource, [uriKind]::Absolute) ?
+        ([uri]$NugetSource).Host :
+        $NugetSource
     )
+
+    Import-Module "$RepoRoot/scripts/secrets.psm1" -Verbose:$false
+    if (-not $ApiKey) {
+        $ApiKey = Read-Secret "Enter API key for pushing packages to $NugetSourceName"
+    }
     Push-Secret $ApiKey
     try {
-        Invoke-Shell -- dotnet nuget push @pushArgs
+        foreach ($package in $PackagePath) {
+            $package = [System.IO.Path]::GetFullPath($package) # retains wildcards
+            $pushArgs = @(
+                $package
+                if ($NugetSource) { '--source', $NugetSource }
+                '--api-key', $ApiKey
+                '--skip-duplicate'
+            )
+            Invoke-Shell -- dotnet nuget push @pushArgs
+        }
     }
     finally {
         Pop-Secret $ApiKey
