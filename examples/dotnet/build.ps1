@@ -4,9 +4,9 @@
 #Requires -Version 7.4
 <#
 .SYNOPSIS
-    A lightweight task runner for common repository tasks.
+    A lightweight task runner for common .NET Core repository tasks.
 .DESCRIPTION
-    This script defines a set of common repository tasks that can be executed from
+    This script defines a set of common .NET Core repository tasks that can be executed from
     the command line.
 
     See the task definitions below for more details on each task and how to use them.
@@ -15,6 +15,9 @@
 .EXAMPLE
     PS> .\build.ps1
     Executes the default 'build' task, including all of its dependencies (e.g. 'restore').
+.EXAMPLE
+    PS> .\build.ps1 list
+    Lists all available tasks.
 .EXAMPLE
     PS> .\build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
