@@ -17,12 +17,13 @@ function Push-Secret {
         a corresponding `Pop-Secret X`.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSPossibleIncorrectUsageOfAssignmentOperator', '', Justification = 'Intended to be used this way.')]
+    [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline)]
-        [string]$s
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string]$Value
     )
     process {
-        if ($s -AND ($secrets.values[$s] += 1) -eq 1) {
+        if ($Value -AND ($secrets.values[$Value] += 1) -eq 1) {
             $secrets.regex = $null
         }
     }
@@ -34,13 +35,14 @@ function Pop-Secret {
         Unregisters a secret value previously registered with Push-Secret.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSPossibleIncorrectUsageOfAssignmentOperator', '', Justification = 'Intended to be used this way.')]
+    [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline)]
-        [string]$s
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string]$Value
     )
     process {
-        if ($s -AND $secrets.values.ContainsKey($s) -AND ($secrets.values[$s] -= 1) -eq 0) {
-            $null = $secrets.values.Remove($s)
+        if ($Value -AND $secrets.values.ContainsKey($Value) -AND ($secrets.values[$Value] -= 1) -eq 0) {
+            $null = $secrets.values.Remove($Value)
             $secrets.regex = $null
         }
     }
@@ -59,7 +61,7 @@ function Protect-Secret {
     [OutputType([string])]
     [Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedParameter', 'Mask', Justification = 'Not unused.')]
     param (
-        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
+        [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
         [AllowEmptyString()]
         [string]$Message,
         [AllowEmptyString()]

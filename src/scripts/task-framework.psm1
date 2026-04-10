@@ -125,6 +125,7 @@ function Reset-TaskFramework {
         to ensure a clean slate when invoking multiple tasks or when reloading the task framework.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Resetting the task framework is a state change, but it is not something that users would typically want to confirm.')]
+    [CmdletBinding()]
     param()
     [TaskDefinition]::Clear()
 }
@@ -181,6 +182,7 @@ function Get-TaskFrameworkTasks {
         This can be useful for listing available tasks or for debugging task definitions.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Tasks is plural because it manages multiple tasks.')]
+    [CmdletBinding()]
     param()
     return [TaskDefinition]::GetOrderedTasks().Values
 }

@@ -78,6 +78,7 @@ function ConvertTo-CommandArgs {
         - Any other value is converted to a string literal using `ConvertTo-PSString`.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Artifacts is plural because it deletes multiple artifacts.')]
+    [CmdletBinding()]
     [OutputType([string])]
     param(
         # The value to convert to a PowerShell command line argument string.
