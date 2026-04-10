@@ -553,7 +553,7 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
         $NugetSource
     )
 
-    Import-Module "$RepoRoot/scripts/secrets.psm1" -Verbose:$false
+    Import-Module "$RepoRoot/scripts/secrets.psm1" -Scope Global -Verbose:$false
     if (-not $ApiKey) {
         $ApiKey = Read-Secret "Enter API key for pushing packages to $NugetSourceName"
     }

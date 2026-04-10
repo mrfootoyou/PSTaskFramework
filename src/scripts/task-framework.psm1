@@ -5,7 +5,7 @@
 
 param()
 
-Import-Module "$PSScriptRoot/psargs.psm1" -Verbose:$false
+Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
 
 class TaskDefinition {
     [string]$Name

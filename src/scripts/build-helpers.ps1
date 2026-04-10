@@ -6,8 +6,8 @@
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingPositionalParameters', 'Invoke-Shell', Justification = 'Invoke-Shell is intended to be used with positional parameters.')]
 param()
 
-Import-Module "$PSScriptRoot/secrets.psm1" -Verbose:$false
-Import-Module "$PSScriptRoot/psargs.psm1" -Verbose:$false
+Import-Module "$PSScriptRoot/secrets.psm1" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
 
 $RepoRoot ??= Split-Path $PSScriptRoot -Parent
 
