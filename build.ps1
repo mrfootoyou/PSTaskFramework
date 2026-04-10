@@ -1,10 +1,29 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore winget,choco,pester,sarif,nunit,psargs,pshelpers
+# spell:ignore pester,sarif,nunit
 #Requires -Version 7.4
+<#
+.SYNOPSIS
+    A lightweight task runner for common PowerShell repository tasks.
+.DESCRIPTION
+    This script defines a set of common PowerShell repository tasks that can be executed from
+    the command line.
 
-[CmdletBinding(PositionalBinding = $false)]
+    See the task definitions below for more details on each task and how to use them.
+
+    PowerShell 7.4 or later is required to use this script. See https://aka.ms/install-powershell.
+.EXAMPLE
+    PS> .\build.ps1
+    Executes the default 'test' and 'analysis' tasks.
+.EXAMPLE
+    PS> .\build.ps1 list
+    Lists all available tasks.
+.EXAMPLE
+    PS> .\build.ps1 test
+    Executes the 'test' task.
+#>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
+[CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
     [Parameter(Position = 0)]
@@ -19,14 +38,29 @@ param (
     [string[]]
     $TaskName = @('test', 'analysis'),
 
+    # Task-specific arguments for the task specified in -TaskName.
+    # Cannot be used when -TaskName contains multiple tasks.
+    # Arguments are _not_ passed to dependencies of the specified task.
+    #
+    # Tip: Use `-- ` to clearly separate build-script arguments from task arguments.
+    # Anything after the `-- ` will be passed verbatim to the invoked task.
+    # For example:
+    #   .\build.ps1 myTask -v -- -v
+    # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
+    # while the second '-v' is passed to 'myTask' as a task-specific argument.
     [Parameter(ValueFromRemainingArguments)]
     [object[]] $TaskArgs,
 
+    # When specified, dependencies of the task(s) will not be executed.
+    # Default is execute all dependencies (and their dependencies).
     [Alias("noDeps")]
     [switch] $SkipDependencies
 )
 $ErrorActionPreference = 'Stop'
 
+# Define the repository root and scripts directory. All tasks will be executed in the
+# context of the repository root ($RepoRoot).
+# Assume this script is located in the repository root.
 $RepoRoot = $PSScriptRoot
 $ScriptsDir = Convert-Path "$RepoRoot/src/scripts"
 $PSModuleVersions = @{
@@ -35,8 +69,21 @@ $PSModuleVersions = @{
     ConvertToSARIF   = '1.0.0'
 }
 
-Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
-
+####################################################################################
+# Define tasks variables
+####################################################################################
+# The properties of the $Variables dictionary will be imported as variables
+# into each task prior to execution. This allows you to define common variables that
+# are shared across all tasks, such as the repository root, scripts directory, or any
+# other values that tasks may need, such as input parameters like $Configuration.
+#
+# The following variables are always available:
+# - $Task: The currently executing task definition.
+# - $TaskName: The name of the currently executing task (same as $Task.Name).
+# - $TaskArgs: An array of the arguments passed to the currently executing task.
+# - $SkipDependencies: Indicates if the task's dependencies were executed.
+# - $TasksToExecute: The ordered list of all tasks to execute.
+# - $Variables: The dictionary of variables to import into each task's scope.
 $Variables = @{
     RepoRoot         = $RepoRoot
     ScriptsDir       = $ScriptsDir
@@ -53,6 +100,7 @@ $ImportScripts = @(
 ####################################################################################
 # Define all tasks
 ####################################################################################
+Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -70,26 +118,10 @@ Task bootstrap -desc 'Installs required tools' {
         evolves, but currently this includes the Pester and PSScriptAnalyzer modules.
     #>
     param()
+    Import-Module "$ScriptsDir/install-helpers.psm1" -Verbose:$false
 
     Write-Host 'Checking required PowerShell modules...'
-    function installIfNeeded([string]$ModuleName) {
-        $minimumVersion = [version]$PSModuleVersions[$ModuleName]
-        $installed = (
-            Get-Module -Name $ModuleName -ListAvailable -ea Ignore |
-            Where-Object Version -ge $minimumVersion
-        )
-        if ($installed) {
-            Write-Host "$ModuleName $($installed.Version) is installed." -ForegroundColor Green
-        }
-        else {
-            Write-Host "Installing $ModuleName $minimumVersion (or greater)..."
-            Install-Module -Name $ModuleName -MinimumVersion $minimumVersion -Scope CurrentUser -Force
-            Write-Host "$ModuleName $($installed.Version) was installed." -ForegroundColor Green
-        }
-    }
-    foreach ($module in $PSModuleVersions.Keys) {
-        installIfNeeded $module
-    }
+    Install-PowerShellModule -ModuleVersions $PSModuleVersions -InformationAction Continue
 
     Write-Host 'Install latest PowerShell from https://aka.ms/powershell' -ForegroundColor Magenta
 }

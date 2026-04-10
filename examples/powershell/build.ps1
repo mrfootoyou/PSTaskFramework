@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore sarif,nunit
+# spell:ignore pester,sarif,nunit
 #Requires -Version 7.4
 <#
 .SYNOPSIS
@@ -118,26 +118,10 @@ Task bootstrap -desc 'Installs required tools' {
         evolves, but currently this includes the Pester and PSScriptAnalyzer modules.
     #>
     param()
+    Import-Module "$ScriptsDir/install-helpers.psm1" -Verbose:$false
 
     Write-Host 'Checking required PowerShell modules...'
-    function installIfNeeded([string]$ModuleName) {
-        $minimumVersion = [version]$PSModuleVersions[$ModuleName]
-        $installed = (
-            Get-Module -Name $ModuleName -ListAvailable -ea Ignore |
-            Where-Object Version -ge $minimumVersion
-        )
-        if ($installed) {
-            Write-Host "$ModuleName $($installed.Version) is installed." -ForegroundColor Green
-        }
-        else {
-            Write-Host "Installing $ModuleName $minimumVersion (or greater)..."
-            Install-Module -Name $ModuleName -MinimumVersion $minimumVersion -Scope CurrentUser -Force
-            Write-Host "$ModuleName $($installed.Version) was installed." -ForegroundColor Green
-        }
-    }
-    foreach ($module in $PSModuleVersions.Keys) {
-        installIfNeeded $module
-    }
+    Install-PowerShellModule -ModuleVersions $PSModuleVersions -InformationAction Continue
 
     Write-Host 'Install latest PowerShell from https://aka.ms/powershell' -ForegroundColor Magenta
 }

@@ -36,10 +36,11 @@ Expected structure within your target repo:
 <repo-root>/
   build.ps1
   scripts/
-    task-framework.psm1
     build-helpers.ps1
+    install-helpers.psm1
     psargs.psm1
     secrets.psm1
+    task-framework.psm1
 ```
 
 ### Requirements
