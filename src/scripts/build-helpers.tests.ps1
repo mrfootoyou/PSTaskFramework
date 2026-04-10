@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
 #Requires -Version 7.4
+
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
+param()
+
 Set-StrictMode -Version Latest
 
 Describe 'build-helpers.ps1' {
