@@ -115,48 +115,15 @@ Task bootstrap -desc 'Installs required tools' {
         - Git (probably already installed, but we'll update if necessary).
         - PowerShell 7.4 or later (assumed to be already be installed).
         - ...
-
-        On Windows it will attempt to install the required tools using WinGet or Chocolatey.
-        If these are not available, it will prompt the user to install the tools manually.
-
-        On non-Windows platforms, it will prompt the user to install the required tools
-        manually.
     #>
     param()
-    $wingetPackageIds = @('Git.Git') # WinGet package IDs. See `winget search <app-name>`.
-    $chocoPackageIds = @('git') # Chocolatey package IDs. See `choco search <app-name>`.
+    Import-Module "$ScriptsDir/install-helpers.psm1" -Verbose:$false
 
-    $installed = $false
-
-    # Check if WinGet is available. See https://learn.microsoft.com/en-us/windows/package-manager/winget/
-    if (!$installed -and $IsWindows -and (Get-Command 'WinGet' -ErrorAction Ignore)) {
-        # WinGet will prompt for admin privileges when necessary.
-        $allowedExitCodes = @(
-            0,
-            0x8A15002B # No applicable update found
-        )
-        Invoke-Shell -AllowedExitCodes $allowedExitCodes -- WinGet install @wingetPackageIds --exact --accept-package-agreements --accept-source-agreements
-        $global:LASTEXITCODE = 0
-        $installed = $true
+    $appsToInstall = [ordered]@{
+        'git'        = $null # well-known app
+        'powershell' = $null # well-known app
     }
-
-    # Check if Chocolatey is available. See https://chocolatey.org/
-    if (!$installed -and $IsWindows -and (Get-Command 'choco' -ErrorAction Ignore)) {
-        # Chocolatey requires admin privileges to install packages.
-        if (Test-Administrator) {
-            Invoke-Shell -- choco install @chocoPackageIds --yes
-        }
-        else {
-            Write-Host 'Running Chocolatey as administrator. Expect a prompt.' -ForegroundColor Yellow
-            Start-Process cmd -ArgumentList "/K choco install $($chocoPackageIds -join ' ') --yes" -Verb RunAs -Wait
-        }
-        $installed = $true
-    }
-
-    if (-not $installed) {
-        Write-Host 'Install latest Git from https://git-scm.com/downloads' -ForegroundColor Magenta
-    }
-    Write-Host 'Install latest PowerShell from https://aka.ms/powershell' -ForegroundColor Magenta
+    Install-RequiredApp $appsToInstall -InstallPackageManagers -InformationAction Continue -Verbose:($VerbosePreference -eq 'Continue')
 }
 
 Task version -desc 'Display tool versions' {

@@ -118,12 +118,14 @@ Task bootstrap -desc 'Installs required tools' {
         evolves, but currently this includes the Pester and PSScriptAnalyzer modules.
     #>
     param()
-    Import-Module "$ScriptsDir/install-helpers.psm1" -Verbose:$false
+    Import-Module "$ScriptsDir/install-helpers.psm1" -Force -Verbose:$false
 
-    Write-Host 'Checking required PowerShell modules...'
+    $appsToInstall = [ordered]@{
+        'git'        = $null # well-known app
+        'powershell' = $null # well-known app
+    }
+    Install-RequiredApp $appsToInstall -InstallPackageManagers -InformationAction Continue -Verbose:($VerbosePreference -eq 'Continue')
     Install-PowerShellModule -ModuleVersions $PSModuleVersions -InformationAction Continue
-
-    Write-Host 'Install latest PowerShell from https://aka.ms/powershell' -ForegroundColor Magenta
 }
 
 Task version -desc 'Display tool versions' {
