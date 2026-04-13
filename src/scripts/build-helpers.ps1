@@ -42,7 +42,7 @@ function Assert-AppExists {
     #>
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Exists is 3rd person present verb.')]
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Exists is not plural.')]
     param(
         # The name or path to the application to check.
         # For maximum compatibility on non-Windows platforms, use the app name without the
@@ -121,7 +121,7 @@ function Invoke-Shell {
     )
 
     $cmdPath = Assert-AppExists $Command -PassThru
-    $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArgs $CommandArgs)"
+    $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArg $CommandArgs)"
     if (!$NoEcho) { Write-Host "$($PSStyle.Dim)>> $cmdText" }
 
     $global:LASTEXITCODE = 0

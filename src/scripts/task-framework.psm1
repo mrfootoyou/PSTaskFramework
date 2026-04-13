@@ -302,7 +302,7 @@ function Invoke-Task {
 
     $TaskName = $Task.Name
 
-    $private:_taskCommandArgs = ConvertTo-CommandArgs $TaskArgs
+    $private:_taskCommandArgs = ConvertTo-CommandArg $TaskArgs
     if ($_taskCommandArgs) {
         Write-Verbose "Invoking task '$TaskName' with arguments: $_taskCommandArgs"
     }

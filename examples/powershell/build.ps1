@@ -305,7 +305,7 @@ Task analysis -desc 'Execute analysis' -dependsOn version {
         Settings = './PSScriptAnalyzerSettings.psd1'
         Fix      = $Fix.IsPresent
     }
-    Write-Host "$($PSStyle.Dim)>> Invoke-ScriptAnalyzer $(ConvertTo-CommandArgs $saArgs)"
+    Write-Host "$($PSStyle.Dim)>> Invoke-ScriptAnalyzer $(ConvertTo-CommandArg $saArgs)"
     $results = Invoke-ScriptAnalyzer @saArgs
     $results | Out-Host
 
@@ -314,7 +314,7 @@ Task analysis -desc 'Execute analysis' -dependsOn version {
             $null = New-Item (Split-Path $SarifPath) -ItemType Directory -Force
         }
 
-        Write-Host "$($PSStyle.Dim)>> ConvertTo-SARIF -FilePath $(ConvertTo-CommandArgs $SarifPath)"
+        Write-Host "$($PSStyle.Dim)>> ConvertTo-SARIF -FilePath $(ConvertTo-CommandArg $SarifPath)"
         $results | ConvertTo-SARIF -FilePath $SarifPath
         Write-Host "SARIF report saved to '$SarifPath'." -ForegroundColor Green
     }
