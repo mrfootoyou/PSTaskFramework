@@ -29,20 +29,30 @@ jobs:
 
       - name: Run tests with coverage
         shell: pwsh
-        run: ./build.ps1 test -CoverageReport
+        run: ./build.ps1 test -TestReport -CoverageReport
 
-      - name: Run static analysis with SARIF output
+      - name: Run static analysis
         shell: pwsh
-        run: ./build.ps1 analysis -CreateSarifReport
+        run: ./build.ps1 analysis
 
-      - name: Upload coverage and SARIF to Codecov
+      - name: Upload test results to Codecov
+        if: always() && job.status != 'cancelled'
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          report_type: test_results
+          files: ./artifacts/results/junit.xml
           disable_search: true
-          files: |
-            ./artifacts/results/coverage.cobertura.xml
-            ./artifacts/results/analysis.sarif
-          flags: ${{ matrix.os }}
-          name: ${{ matrix.os }}-reports
+          env_vars: OS
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+      - name: Upload coverage to Codecov
+        if: always() && job.status != 'cancelled'
+        uses: codecov/codecov-action@v5
+        with:
+          report_type: coverage
+          files: ./artifacts/results/coverage.cobertura.xml
+          disable_search: true
+          env_vars: OS
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
