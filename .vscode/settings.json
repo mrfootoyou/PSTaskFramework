@@ -31,5 +31,6 @@
     "editor.defaultFormatter": "ms-vscode.powershell"
   },
   "powershell.scriptAnalysis.enable": true,
-  "files.associations": {}
+  "powershell.scriptAnalysis.settingsPath": "./PSScriptAnalyzerSettings.psd1",
+  "powershell.codeFormatting.preset": "Stroustrup"
 }

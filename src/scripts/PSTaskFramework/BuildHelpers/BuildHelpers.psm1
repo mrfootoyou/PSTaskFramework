@@ -6,10 +6,8 @@
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingPositionalParameters', 'Invoke-Shell', Justification = 'Invoke-Shell is intended to be used with positional parameters.')]
 param()
 
-Import-Module "$PSScriptRoot/secrets.psm1" -Verbose:$false
-Import-Module "$PSScriptRoot/psargs.psm1" -Verbose:$false
-
-$RepoRoot ??= Split-Path $PSScriptRoot -Parent
+Import-Module "$PSScriptRoot/../Secrets" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/../PSArgs" -Scope Global -Verbose:$false
 
 # Mockable functions for testing purposes. These are not intended to be used directly.
 function getUserId {
@@ -17,6 +15,10 @@ function getUserId {
 }
 
 function Test-Administrator {
+    <#
+    .DESCRIPTION
+        Check if the current user has administrative (Windows) or root (Linux/macOS) privileges.
+    #>
     if ($IsWindows) {
         # test for administrator on Windows
         return [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -42,7 +44,7 @@ function Assert-AppExists {
     #>
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Exists is 3rd person present verb.')]
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Exists is not plural.')]
     param(
         # The name or path to the application to check.
         # For maximum compatibility on non-Windows platforms, use the app name without the
@@ -61,7 +63,7 @@ function Assert-AppExists {
 
     # When multiple commands with the same name are found, Get-Command returns
     # them in execution precedence order. So take the first one
-    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore | Select-Object -First 1
+    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore -TotalCount 1
     if (!$cmd) {
         if ($ErrorActionPreference -ne 'Ignore') {
             $appName = $AppTitle ? "$AppTitle ($AppPath)" : $AppPath
@@ -71,7 +73,7 @@ function Assert-AppExists {
         return
     }
     if ($PassThru) {
-        return $cmd.Source
+        return $cmd.Path
     }
 }
 
@@ -121,7 +123,7 @@ function Invoke-Shell {
     )
 
     $cmdPath = Assert-AppExists $Command -PassThru
-    $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArgs $CommandArgs)"
+    $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArg $CommandArgs)"
     if (!$NoEcho) { Write-Host "$($PSStyle.Dim)>> $cmdText" }
 
     $global:LASTEXITCODE = 0
@@ -136,3 +138,13 @@ function Invoke-Shell {
     }
 }
 
+# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
+$exportModuleMemberParams = @{
+    Function = @(
+        'Test-Administrator'
+        'Assert-AppExists'
+        'Invoke-Shell'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

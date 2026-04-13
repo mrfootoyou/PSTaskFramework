@@ -16,6 +16,9 @@
     PS> .\build.ps1
     Executes the default 'build' task, including all of its dependencies (e.g. 'restore').
 .EXAMPLE
+    PS> .\build.ps1 list
+    Lists all available tasks.
+.EXAMPLE
     PS> .\build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
 #>
@@ -66,23 +69,13 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
 $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
-# Import the Task Framework and clear any previous state...
-Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
-Reset-TaskFramework
-
 ####################################################################################
 # Define tasks variables
-#
-# Each task is executed in an isolated scope, meaning they only have access to
-# global variables and variables defined in the $Variables dictionary.
-#
+####################################################################################
 # The properties of the $Variables dictionary will be imported as variables
 # into each task prior to execution. This allows you to define common variables that
 # are shared across all tasks, such as the repository root, scripts directory, or any
 # other values that tasks may need, such as input parameters like $Configuration.
-#
-# The $Variables dictionary itself is available to all tasks, enabling tasks to
-# pass information to subsequent tasks.
 #
 # The following variables are always available:
 # - $Task: The currently executing task definition.
@@ -100,13 +93,13 @@ $Variables = @{
 
 # These scripts will be imported into each task prior to execution.
 $ImportScripts = @(
-    Join-Path $ScriptsDir 'build-helpers.ps1'
     # Add more scripts here as needed
 )
 
 ####################################################################################
 # Define all tasks
 ####################################################################################
+Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -121,48 +114,15 @@ Task bootstrap -desc 'Installs required tools' {
         - Git (probably already installed, but we'll update if necessary).
         - PowerShell 7.4 or later (assumed to be already be installed).
         - ...
-
-        On Windows it will attempt to install the required tools using WinGet or Chocolatey.
-        If these are not available, it will prompt the user to install the tools manually.
-
-        On non-Windows platforms, it will prompt the user to install the required tools
-        manually.
     #>
     param()
-    $wingetPackageIds = @('Git.Git') # WinGet package IDs. See `winget search <app-name>`.
-    $chocoPackageIds = @('git') # Chocolatey package IDs. See `choco search <app-name>`.
+    Import-Module "$ScriptsDir/install-helpers.psm1" -Verbose:$false
 
-    $installed = $false
-
-    # Check if WinGet is available. See https://learn.microsoft.com/en-us/windows/package-manager/winget/
-    if (!$installed -and $IsWindows -and (Get-Command 'WinGet' -ErrorAction Ignore)) {
-        # WinGet will prompt for admin privileges when necessary.
-        $allowedExitCodes = @(
-            0,
-            0x8A15002B # No applicable update found
-        )
-        Invoke-Shell -AllowedExitCodes $allowedExitCodes -- WinGet install @wingetPackageIds --exact --accept-package-agreements --accept-source-agreements
-        $global:LASTEXITCODE = 0
-        $installed = $true
+    $appsToInstall = [ordered]@{
+        'git'        = $null # well-known app
+        'powershell' = $null # well-known app
     }
-
-    # Check if Chocolatey is available. See https://chocolatey.org/
-    if (!$installed -and $IsWindows -and (Get-Command 'choco' -ErrorAction Ignore)) {
-        # Chocolatey requires admin privileges to install packages.
-        if (Test-Administrator) {
-            Invoke-Shell -- choco install @chocoPackageIds --yes
-        }
-        else {
-            Write-Host 'Running Chocolatey as administrator. Expect a prompt.' -ForegroundColor Yellow
-            Start-Process cmd -ArgumentList "/K choco install $($chocoPackageIds -join ' ') --yes" -Verb RunAs -Wait
-        }
-        $installed = $true
-    }
-
-    if (-not $installed) {
-        Write-Host 'Install latest Git from https://git-scm.com/downloads' -ForegroundColor Magenta
-    }
-    Write-Host 'Install latest PowerShell from https://aka.ms/powershell' -ForegroundColor Magenta
+    Install-RequiredApp $appsToInstall -InstallPackageManagers -InformationAction Continue -Verbose:($VerbosePreference -eq 'Continue')
 }
 
 Task version -desc 'Display tool versions' {

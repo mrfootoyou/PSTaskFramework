@@ -4,9 +4,9 @@
 #Requires -Version 7.4
 <#
 .SYNOPSIS
-    A lightweight task runner for common repository tasks.
+    A lightweight task runner for common .NET Core repository tasks.
 .DESCRIPTION
-    This script defines a set of common repository tasks that can be executed from
+    This script defines a set of common .NET Core repository tasks that can be executed from
     the command line.
 
     See the task definitions below for more details on each task and how to use them.
@@ -16,11 +16,14 @@
     PS> .\build.ps1
     Executes the default 'build' task, including all of its dependencies (e.g. 'restore').
 .EXAMPLE
+    PS> .\build.ps1 list
+    Lists all available tasks.
+.EXAMPLE
     PS> .\build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
 #>
-[CmdletBinding(PositionalBinding = $false)]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
+[CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
     [Parameter(Position = 0)]
@@ -51,6 +54,10 @@ param (
     [string]
     $Configuration = 'debug',
 
+    # The version to use when executing tasks that support it (e.g. 'build', 'package').
+    [string]
+    $Version,
+
     # Task-specific arguments for the task specified in -TaskName.
     # Cannot be used when -TaskName contains multiple tasks.
     # Arguments are _not_ passed to dependencies of the specified task.
@@ -77,23 +84,13 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
 $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
-# Import the Task Framework and clear any previous state...
-Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
-Reset-TaskFramework
-
 ####################################################################################
 # Define tasks variables
-#
-# Each task is executed in an isolated scope, meaning they only have access to
-# global variables and variables defined in the $Variables dictionary.
-#
+####################################################################################
 # The properties of the $Variables dictionary will be imported as variables
 # into each task prior to execution. This allows you to define common variables that
 # are shared across all tasks, such as the repository root, scripts directory, or any
 # other values that tasks may need, such as input parameters like $Configuration.
-#
-# The $Variables dictionary itself is available to all tasks, enabling tasks to
-# pass information to subsequent tasks.
 #
 # The following variables are always available:
 # - $Task: The currently executing task definition.
@@ -106,18 +103,19 @@ $Variables = @{
     RepoRoot      = $RepoRoot
     ScriptsDir    = $ScriptsDir
     Configuration = $Configuration
+    Version       = $Version
     # Add more variables here as needed
 }
 
 # These scripts will be imported into each task prior to execution.
 $ImportScripts = @(
-    Join-Path $ScriptsDir 'build-helpers.ps1'
     # Add more scripts here as needed
 )
 
 ####################################################################################
 # Define all tasks
 ####################################################################################
+Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -130,52 +128,20 @@ Task bootstrap -desc 'Installs required tools' {
 
         Required tools include:
         - Git (probably already installed, but we'll update if necessary).
-        - PowerShell 7.4 or later (assumed to be already be installed).
         - .NET SDK
         - Docker-API compatible container runtime for integration tests.
-
-        On Windows it will attempt to install the required tools using WinGet or Chocolatey.
-        If these are not available, it will prompt the user to install the tools manually.
-
-        On non-Windows platforms, it will prompt the user to install the required tools
-        manually.
+        - PowerShell 7.4 or later (assumed to be already be installed).
     #>
     param()
-    $sdkMajorVersion = '10'
-    $wingetPackageIds = @("Microsoft.DotNet.SDK.$sdkMajorVersion", 'Docker.DockerDesktop', 'Git.Git')
-    $chocoPackageIds = @("dotnet-$sdkMajorVersion.0-sdk", 'docker-desktop', 'git')
-    $installed = $false
+    Import-Module "$ScriptsDir/install-helpers.psm1" -Verbose:$false
 
-    # Check if WinGet is available. See https://learn.microsoft.com/en-us/windows/package-manager/winget/
-    if (!$installed -and $IsWindows -and (Get-Command 'WinGet' -ErrorAction Ignore)) {
-        # WinGet will prompt for admin privileges when necessary.
-        $allowedExitCodes = @(
-            0,
-            0x8A15002B # No applicable update found
-        )
-        Invoke-Shell -AllowedExitCodes $allowedExitCodes -- WinGet install @wingetPackageIds --exact --accept-package-agreements --accept-source-agreements
-        $installed = $true
+    $appsToInstall = [ordered]@{
+        'git'           = $null # well-known app
+        'dotnet-sdk-10' = $null # well-known app
+        'docker'        = $null # well-known app
+        'powershell'    = $null # well-known app
     }
-
-    # Check if Chocolatey is available. See https://chocolatey.org/
-    if (!$installed -and $IsWindows -and (Get-Command 'choco' -ErrorAction Ignore)) {
-        # Chocolatey requires admin privileges to install packages.
-        if (Test-Administrator) {
-            Invoke-Shell -- choco install @chocoPackageIds --yes
-        }
-        else {
-            Write-Host 'Running Chocolatey as administrator. Expect a prompt.' -ForegroundColor Yellow
-            Start-Process cmd -ArgumentList "/K choco install $($chocoPackageIds -join ' ') --yes" -Verb RunAs -Wait
-        }
-        $installed = $true
-    }
-
-    if (-not $installed) {
-        Write-Host "Install latest .NET $sdkMajorVersion SDK from https://aka.ms/dotnet-download" -ForegroundColor Magenta
-        Write-Host 'Install Docker runtime, e.g. https://www.docker.com/products/docker-desktop' -ForegroundColor Magenta
-        Write-Host 'Install latest Git from https://git-scm.com/downloads' -ForegroundColor Magenta
-    }
-    Write-Host 'Install latest PowerShell from https://aka.ms/powershell' -ForegroundColor Magenta
+    Install-RequiredApp $appsToInstall -InstallPackageManagers -InformationAction Continue -Verbose:($VerbosePreference -eq 'Continue')
 }
 
 Task version -desc 'Display tool versions' {
@@ -185,6 +151,35 @@ Task version -desc 'Display tool versions' {
         'OS Platform' = "$($PSVersionTable.OS) ($($PSVersionTable.Platform))"
         'RepoRoot'    = $RepoRoot
     } | Format-List
+}
+
+Task clean -desc 'Clean the repository' -DependsOn version {
+    <#
+    .DESCRIPTION
+        Cleans the repository using 'git clean'. By default it will run in interactive mode,
+        prompting the user to confirm which files to delete. To skip the confirmation prompt,
+        use the -Force switch.
+
+        By default this uses 'git clean -X' to remove all untracked files that are
+        ignored by git (e.g. build outputs, .vs folders, etc). This is typically safer since
+        it leaves behind untracked files that are _not_ ignored by git, such as new source files.
+
+        If you want to remove all untracked files, including those not ignored by git, use
+        the -Pristine switch to run 'git clean -x' instead.
+    #>
+    param(
+        # If specified, will run 'git clean -x' instead of 'git clean -X'
+        [switch]$Pristine,
+        # If specified, will skip the confirmation prompt and run 'git clean' with the -force option.
+        [switch]$Force
+    )
+    $cleanArgs = @(
+        '-d' # remove untracked directories in addition to untracked files
+        ($Pristine ? '-x' : '-X')
+        ($Force ? '--force' : '--interactive')
+        '--exclude=.env' # never delete .env files since they often contain secrets
+    )
+    Invoke-Shell -- git clean @cleanArgs
 }
 
 Task updateTools -desc 'Update .NET tools' -DependsOn version {
@@ -246,35 +241,6 @@ Task updateRepo -desc 'Update the repository tools and packages' -DependsOn boot
     # This is a aggregate task that runs all tasks to keep the repository up to date.
 }
 
-Task clean -desc 'Clean the project' -DependsOn version {
-    <#
-    .DESCRIPTION
-        Cleans the repository using 'git clean'. By default it will run in interactive mode,
-        prompting the user to confirm which files to delete. To skip the confirmation prompt,
-        use the -Force switch.
-
-        By default this uses 'git clean -X' to remove all untracked files that are
-        ignored by git (e.g. build outputs, .vs folders, etc). This is typically safer since
-        it leaves behind untracked files that are _not_ ignored by git, such as new source files.
-
-        If you want to remove all untracked files, including those not ignored by git, use
-        the -Pristine switch to run 'git clean -x' instead.
-    #>
-    param(
-        # If specified, will run 'git clean -x' instead of 'git clean -X'
-        [switch]$Pristine,
-        # If specified, will skip the confirmation prompt and run 'git clean' with the -force option.
-        [switch]$Force
-    )
-    $cleanArgs = @(
-        '-d' # remove untracked directories in addition to untracked files
-        ($Pristine ? '-x' : '-X')
-        ($Force ? '--force' : '--interactive')
-        '--exclude=.env' # never delete .env files since they often contain secrets
-    )
-    Invoke-Shell -- git clean @cleanArgs
-}
-
 Task format -desc 'Format the code' -DependsOn restoreTools {
     <#
     .DESCRIPTION
@@ -305,33 +271,22 @@ Task format -desc 'Format the code' -DependsOn restoreTools {
     Invoke-Shell -- dotnet csharpier @csharpierArgs
 }
 
-Task build -desc 'Build the project' -dependsOn restore {
+Task build -desc 'Build the solution' -dependsOn restore {
     <#
     .DESCRIPTION
-        Builds the project using 'dotnet build'.
-
-        By default, it builds all projects in the repository. You can specify a single project
-        to build using the -TargetProject parameter.
+        Builds the solution using 'dotnet build'.
 
         The build configuration can be specified using the -Configuration parameter (e.g.
-        'debug' or 'release'). When building release builds, the version must be specified
-        using the -Version parameter. For non-release builds the version is optional.
+        'debug' or 'release'). A build version can be specified using the -Version parameter.
     .EXAMPLE
         PS> .\build.ps1 build
-        Builds the debug configuration of all projects in the repository.
+        Builds the debug configuration of the solution.
     .EXAMPLE
-        PS> .\build.ps1 build -Configuration Release -TargetProject ./src/LeaderElection.S3 -Version 1.2.3
-        Builds the release configuration of the specified project with version 1.2.3.
+        PS> .\build.ps1 build -Configuration Release -Version 1.2.3
+        Builds the release configuration assigning it version 1.2.3.
     #>
-    param(
-        # The package version to use when building. This is only required for release builds,
-        # but can be specified for non-release builds as well.
-        [string]$Version,
-        # Optional path to the project to build. If not specified, all projects will be built.
-        [string]$TargetProject
-    )
+    param()
     $buildArgs = @(
-        if ($TargetProject) { $TargetProject }
         '--configuration', $Configuration
         '--no-restore'
         if ($Version) { "-p:Version=$Version" }
@@ -458,39 +413,38 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
     }
 }
 
-Task package -desc 'Package the project' -dependsOn build {
+Task package -desc 'Package the solution' -dependsOn build {
     <#
     .DESCRIPTION
-        Packages the project into NuGet packages using 'dotnet pack'.
+        Packages the solution into NuGet packages using 'dotnet pack'.
 
-        By default, it will package all projects that can be packaged. You can specify
-        a single project to package using the -TargetProject parameter.
+        By default, it will package all packable projects in the solution. You can specify
+        a specific project using the -TargetProject parameter.
 
-        The output packages will be placed in the "artifacts/package/$Configuration"
+        The output packages will be placed in the "artifacts/package/$configuration"
         directory by default, but you can specify a different output directory using
         the -OutputDir parameter.
 
         When packaging release builds, the version must be specified using the -Version
         parameter. For non-release builds, the version is optional and will default to
-        whatever version is specified in the .csproj file(s).
+        whatever version is specified in the .csproj file(s), usually 1.0.0.
     .EXAMPLE
         PS> .\build.ps1 package
-        Packages all package-able projects in the repository using the Debug configuration
-        using the default version.
+        Build and package all packable projects in the solution using the Debug
+        configuration and default version.
     .EXAMPLE
-        PS> .\build.ps1 package -TargetProject ./src/LeaderElection.S3 -Version 1.2.3
-        Packages the specified project with version 1.2.3.
+        PS> .\build.ps1 package -Version 1.2.3 -TargetProject ./src/MyProject/
+        Build and package the specified project as version 1.2.3.
     #>
     param(
-        # The package version.
-        [string]$Version,
-        # Optional path to the project to package. If not specified, all packable projects will be packaged.
+        # Optional path to the project to package. If not specified, all packable projects
+        # in the solution will be packaged.
         [string]$TargetProject,
-        # The output directory for the package(s). Defaults to "artifacts/package/$Configuration".
+        # The output directory for the package(s). Defaults to "artifacts/package/$configuration".
         [string]$OutputDir = "artifacts/package/$($Configuration.ToLower())"
     )
     if ($Configuration -eq 'release' -and -not $Version) {
-        throw 'Version must be specified when packaging release builds.'
+        throw 'Version must be specified when packing release builds.'
     }
     if ($Configuration -ne 'release') {
         Write-Warning "Packaging $Configuration build! It's recommended to only package Release builds."
@@ -506,46 +460,80 @@ Task package -desc 'Package the project' -dependsOn build {
     Invoke-Shell -- dotnet pack @packArgs
 }
 
-Task push -desc 'Push packages to NuGet.org' -dependsOn package {
+Task push -desc 'Push NuGet packages' -dependsOn version {
     <#
     .DESCRIPTION
-        Pushes NuGet packages to NuGet.org.
+        Pushes the specified NuGet packages to the configured NuGet source.
 
-        By default it pushes all .nupkg files in the "artifacts/package/$Configuration"
-        directory. You can specify a different set of packages to push using the -PackagePath
-        parameter.
+        Note: This task requires the packages to have already been created (see
+        the 'package' task).
     .EXAMPLE
-        PS> .\build.ps1 push -Configuration Release -NoDeps
-        Pushes previously built packages in the "artifacts/package/release" directory to
-        NuGet.org, prompting for the API key if not set via the NUGET_API_KEY environment variable.
+        PS> ./build.ps1 push ./artifacts/package/release
+        Push all packages in the specified folder to the default NuGet source,
+        prompting for the API key if not set via the NUGET_API_KEY environment variable.
     .EXAMPLE
-        PS> .\build.ps1 push -Configuration Release -PackagePath "artifacts/package/release/MyPackage.1.2.3.nupkg" -ApiKey $secretKey
-        Pushes the specified package to NuGet.org using the specified API key.
+        PS> ./build.ps1 push ./artifacts/package/release/MyPackage.1.2.3.nupkg -ApiKey $secretKey
+        Push the specified package using the specified API key.
     #>
+    [CmdletBinding(PositionalBinding = $false)]
     param(
+        # The path(s) to the package(s) to push. Can be a single path (file or directory)
+        # or an array of paths.
+        [Parameter(Mandatory, Position = 0)]
+        [string[]]$PackagePath,
         # The API key to use when pushing packages. Defaults to the NUGET_API_KEY
         # environment variable. If not set, the user will be prompted for the API key.
         [string]$ApiKey = $env:NUGET_API_KEY,
-        # The path(s) to the package(s) to push. Can be a single path or an array of paths.
-        # Defaults to "artifacts/package/$Configuration/*.nupkg"
-        [string[]]$PackagePath = @("artifacts/package/$($Configuration.ToLower())/*.nupkg")
+        # Url or source name of the target NuGet registry. Defaults to the configured
+        # `DefaultPushSource` if any, otherwise NuGet.org.
+        [string]$NugetSource = $null
     )
-    Import-Module "$RepoRoot/scripts/secrets.psm1" -Verbose:$false
 
-    if ($Configuration -ne 'release') {
-        throw "Must not push $Configuration build!"
+    $PackagePath = $PackagePath.foreach{
+        $package = $_
+        if (Test-Path $package -PathType Container) {
+            $package = Join-Path $package '*.nupkg'
+        }
+        if (!(Test-Path $package -PathType Leaf)) {
+            throw "Package not found: '$package'."
+        }
+        $package
     }
-    if (-not $ApiKey) {
-        $ApiKey = Read-Secret "Enter API key for pushing packages to NuGet.org (or set the NUGET_API_KEY environment variable to avoid this prompt)"
+
+    $NugetSourceName = $null
+    if (!$NugetSource) {
+        # is there a default push source configured...
+        $dps = Invoke-Shell -noEcho -ea Ignore -- dotnet nuget config get DefaultPushSource 2>&1
+        if ($global:LASTEXITCODE -eq 0) {
+            $NugetSource = $dps.Trim()
+        }
+        else {
+            Write-Host 'No default NuGet push source configured. Defaulting to NuGet.org.' -ForegroundColor Yellow
+            $NugetSource = 'https://api.nuget.org/v3/index.json'
+            $NugetSourceName = 'NuGet.org'
+        }
     }
-    $pushArgs = @(
-        [System.IO.Path]::GetFullPath($PackagePath)
-        '--source', 'https://api.nuget.org/v3/index.json'
-        '--api-key', $ApiKey
+    $NugetSourceName ??= (
+        [uri]::IsWellFormedUriString($NugetSource, [uriKind]::Absolute) ?
+        ([uri]$NugetSource).Host :
+        $NugetSource
     )
+
+    if (-not $ApiKey) {
+        $ApiKey = Read-Secret "Enter API key for pushing packages to $NugetSourceName"
+    }
     Push-Secret $ApiKey
     try {
-        Invoke-Shell -- dotnet nuget push @pushArgs
+        foreach ($package in $PackagePath) {
+            $package = [System.IO.Path]::GetFullPath($package) # retains wildcards
+            $pushArgs = @(
+                $package
+                if ($NugetSource) { '--source', $NugetSource }
+                '--api-key', $ApiKey
+                '--skip-duplicate'
+            )
+            Invoke-Shell -- dotnet nuget push @pushArgs
+        }
     }
     finally {
         Pop-Secret $ApiKey

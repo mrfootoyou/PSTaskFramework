@@ -1,17 +1,21 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore psargs,pscustomobject
+# spell:ignore pscustomobject
 #Requires -Version 7.4
+
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
+param()
+
 Set-StrictMode -Version Latest
 
-Describe 'psargs.ps1' {
+Describe 'PSTaskFramework.PSArgs Module' {
     BeforeAll {
-        $modulePath = Join-Path $PSScriptRoot 'psargs.psm1'
+        $modulePath = Join-Path $PSScriptRoot 'PSArgs.psm1'
         Import-Module $modulePath -Force
     }
 
     AfterAll {
-        Remove-Module -Name psargs -ErrorAction Ignore
+        Remove-Module -Name PSArgs -ErrorAction Ignore
     }
 
     Context 'ConvertTo-PSString' {
@@ -93,33 +97,33 @@ Describe 'psargs.ps1' {
         }
     }
 
-    Context 'ConvertTo-CommandArgs' {
+    Context 'ConvertTo-CommandArg' {
         It 'returns an empty string for null input' {
-            $result = $null | ConvertTo-CommandArgs
+            $result = $null | ConvertTo-CommandArg
 
             $result | Should -BeExactly ''
         }
 
         It 'converts arrays into space-separated arguments' {
-            $result = ConvertTo-CommandArgs -InputObject @('alpha', 'beta value', 42)
+            $result = ConvertTo-CommandArg -InputObject @('alpha', 'beta value', 42)
 
             $result | Should -BeExactly "alpha 'beta value' 42"
         }
 
         It 'converts dictionaries into named arguments' {
-            $result = ([ordered]@{ Name = 'value with space'; Count = 2 }) | ConvertTo-CommandArgs
+            $result = ([ordered]@{ Name = 'value with space'; Count = 2 }) | ConvertTo-CommandArg
 
             $result | Should -BeExactly "-Name:'value with space' -Count:2"
         }
 
         It 'converts PSCustomObject into named arguments' {
-            $result = ([pscustomobject]@{ Name = 'value with space'; Enabled = $true }) | ConvertTo-CommandArgs
+            $result = ([pscustomobject]@{ Name = 'value with space'; Enabled = $true }) | ConvertTo-CommandArg
 
             $result | Should -BeExactly "-Name:'value with space' -Enabled:`$True"
         }
 
         It 'converts single scalar values to argument strings' {
-            $result = 'value with space' | ConvertTo-CommandArgs
+            $result = 'value with space' | ConvertTo-CommandArg
 
             $result | Should -BeExactly "'value with space'"
         }

@@ -3,13 +3,14 @@
 #Requires -Version 7.4
 
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'test code')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 param()
 
 Set-StrictMode -Version Latest
 
-Describe 'secrets.psm1' {
+Describe 'PSTaskFramework.Secrets Module' {
     BeforeEach {
-        $modulePath = Join-Path $PSScriptRoot 'secrets.psm1'
+        $modulePath = Join-Path $PSScriptRoot 'Secrets.psm1'
         Import-Module $modulePath -Force
 
         $script:previousCi = $env:CI
@@ -24,7 +25,7 @@ Describe 'secrets.psm1' {
             $env:CI = $script:previousCi
         }
 
-        Remove-Module -Name secrets -ErrorAction Ignore
+        Remove-Module -Name Secrets -ErrorAction Ignore
     }
 
     Context 'Protect-Secret' {
@@ -114,18 +115,18 @@ Describe 'secrets.psm1' {
         }
 
         It 'returns plain text from secure input outside CI' {
-            Mock -CommandName Read-Host -ModuleName secrets -MockWith {
+            Mock -CommandName Read-Host -ModuleName Secrets -MockWith {
                 ConvertTo-SecureString 'my-secret' -AsPlainText -Force
             }
 
             $result = Read-Secret -Prompt 'Enter value'
 
             $result | Should -BeExactly 'my-secret'
-            Should -Invoke -CommandName Read-Host -ModuleName secrets -Times 1 -Exactly
+            Should -Invoke -CommandName Read-Host -ModuleName Secrets -Times 1 -Exactly
         }
 
         It 'writes an error when no value is provided and AllowEmpty is not set' {
-            Mock -CommandName Read-Host -ModuleName secrets -MockWith {
+            Mock -CommandName Read-Host -ModuleName Secrets -MockWith {
                 [System.Security.SecureString]::new()
             }
 
@@ -133,7 +134,7 @@ Describe 'secrets.psm1' {
         }
 
         It 'allows empty values when AllowEmpty is set outside CI' {
-            Mock -CommandName Read-Host -ModuleName secrets -MockWith {
+            Mock -CommandName Read-Host -ModuleName Secrets -MockWith {
                 [System.Security.SecureString]::new()
             }
 
