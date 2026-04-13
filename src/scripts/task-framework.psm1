@@ -292,7 +292,12 @@ function Invoke-Task {
 
     $ImportScripts.foreach{
         Write-Verbose "Importing script '$_'."
-        . $_
+        if ($_ -like '*.ps1') {
+            . $_
+        }
+        else {
+            Import-Module $_ -Scope Local -Verbose:$false
+        }
     }
 
     $Variables.Keys.foreach{

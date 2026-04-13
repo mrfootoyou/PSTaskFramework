@@ -8,7 +8,7 @@ param()
 
 Set-StrictMode -Version Latest
 
-Describe 'secrets.psm1' {
+Describe 'secrets' {
     BeforeEach {
         $modulePath = Join-Path $PSScriptRoot 'secrets.psm1'
         Import-Module $modulePath -Force

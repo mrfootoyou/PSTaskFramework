@@ -7,7 +7,7 @@ param()
 
 Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
 Import-Module "$PSScriptRoot/secrets.psm1" -Scope Global -Verbose:$false
-. "$PSScriptRoot/build-helpers.ps1"
+Import-Module "$PSScriptRoot/build-helpers.psm1" -Scope Global -Verbose:$false
 
 # Canonical install metadata for common tools.
 #

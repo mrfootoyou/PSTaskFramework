@@ -8,7 +8,7 @@ param()
 
 Set-StrictMode -Version Latest
 
-Describe 'psargs.ps1' {
+Describe 'psargs' {
     BeforeAll {
         $modulePath = Join-Path $PSScriptRoot 'psargs.psm1'
         Import-Module $modulePath -Force

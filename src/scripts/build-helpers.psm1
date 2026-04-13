@@ -9,14 +9,16 @@ param()
 Import-Module "$PSScriptRoot/secrets.psm1" -Scope Global -Verbose:$false
 Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
 
-$RepoRoot ??= Split-Path $PSScriptRoot -Parent
-
 # Mockable functions for testing purposes. These are not intended to be used directly.
 function getUserId {
     id -u
 }
 
 function Test-Administrator {
+    <#
+    .DESCRIPTION
+        Check if the current user has administrative (Windows) or root (Linux/macOS) privileges.
+    #>
     if ($IsWindows) {
         # test for administrator on Windows
         return [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -136,3 +138,4 @@ function Invoke-Shell {
     }
 }
 
+Export-ModuleMember -Function Test-Administrator, Assert-AppExists, Invoke-Shell

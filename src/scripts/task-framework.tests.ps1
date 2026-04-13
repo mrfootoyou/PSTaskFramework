@@ -8,7 +8,7 @@ param()
 
 Set-StrictMode -Version Latest
 
-Describe 'task-framework.psm1' {
+Describe 'task-framework' {
     BeforeAll {
         $modulePath = Join-Path $PSScriptRoot 'task-framework.psm1'
         Import-Module $modulePath -Force -Scope Local

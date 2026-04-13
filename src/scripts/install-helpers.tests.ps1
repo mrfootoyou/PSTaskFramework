@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore appx,winget,choco
+# spell:ignore appx,winget,choco,mytool,Contoso
 #Requires -Version 7.4
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
@@ -9,7 +9,7 @@ param()
 
 Set-StrictMode -Version Latest
 
-Describe 'install-helpers.psm1' {
+Describe 'install-helpers' {
     BeforeAll {
         $script:addedInstallModuleStub = $false
         if (-not (Get-Command Install-Module -ErrorAction Ignore)) {

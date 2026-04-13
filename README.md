@@ -36,7 +36,7 @@ Expected structure within your target repo:
 <repo-root>/
   build.ps1
   scripts/
-    build-helpers.ps1
+    build-helpers.psm1
     install-helpers.psm1
     psargs.psm1
     secrets.psm1
@@ -213,6 +213,12 @@ $ImportScripts = @(
 )
 ```
 
+Notes:
+
+- `.ps1` script files will be dot-sourced just before task execution.
+- `.psm1`/`.psd1` module files will be imported using `Import-Module -Scope Local` just before task
+  execution.
+
 ### Execute tasks
 
 In the simplest case, you can just run `./build.ps1 <taskName>` to execute a task and its
@@ -329,9 +335,10 @@ Fix:
 If you need to adjust framework behavior (not just tasks), these are the key files:
 
 - `src/scripts/task-framework.psm1`: task registration, dependency ordering, and execution engine.
-- `src/scripts/build-helpers.ps1`: shell invocation and prerequisite helpers used by tasks.
+- `src/scripts/build-helpers.psm1`: shell invocation and prerequisite helpers used by tasks.
 - `src/scripts/psargs.psm1`: argument-to-command conversion helpers.
 - `src/scripts/secrets.psm1`: secret masking and CI-aware secret input behavior.
+- `src/scripts/install-helpers.psm1`: installation helpers for package and modules.
 
 For most adopters, you should not need to modify the framework modules at all.
 
