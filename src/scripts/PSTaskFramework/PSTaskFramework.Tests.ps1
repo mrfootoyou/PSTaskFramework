@@ -8,12 +8,12 @@ param()
 
 Set-StrictMode -Version Latest
 
-Describe 'task-framework' {
+Describe 'PSTaskFramework Module' {
     BeforeAll {
-        $modulePath = Join-Path $PSScriptRoot 'task-framework.psm1'
-        Import-Module $modulePath -Force -Scope Local
+        $modulePath = Join-Path $PSScriptRoot 'PSTaskFramework.psm1'
+        Import-Module $modulePath -Force
 
-        Mock -CommandName 'Write-Host' -MockWith { } -ModuleName 'task-framework'
+        Mock -CommandName 'Write-Host' -MockWith { } -ModuleName 'PSTaskFramework' -Verbose:$false
     }
 
     BeforeEach {
@@ -23,7 +23,7 @@ Describe 'task-framework' {
     }
 
     AfterAll {
-        Remove-Module -Name task-framework -ErrorAction Ignore
+        Remove-Module -Name PSTaskFramework -ErrorAction Ignore
     }
 
     It 'fails when no tasks are specified' {

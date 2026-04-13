@@ -126,4 +126,14 @@ function Read-Secret {
     return $value
 }
 
-Export-ModuleMember -Function Read-Secret, Push-Secret, Pop-Secret, Protect-Secret
+# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
+$exportModuleMemberParams = @{
+    Function = @(
+        'Read-Secret'
+        'Push-Secret'
+        'Pop-Secret'
+        'Protect-Secret'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

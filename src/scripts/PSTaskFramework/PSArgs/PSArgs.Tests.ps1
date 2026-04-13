@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Unlicense
 # Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore psargs,pscustomobject
+# spell:ignore pscustomobject
 #Requires -Version 7.4
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
@@ -8,14 +8,14 @@ param()
 
 Set-StrictMode -Version Latest
 
-Describe 'psargs' {
+Describe 'PSTaskFramework.PSArgs Module' {
     BeforeAll {
-        $modulePath = Join-Path $PSScriptRoot 'psargs.psm1'
+        $modulePath = Join-Path $PSScriptRoot 'PSArgs.psm1'
         Import-Module $modulePath -Force
     }
 
     AfterAll {
-        Remove-Module -Name psargs -ErrorAction Ignore
+        Remove-Module -Name PSArgs -ErrorAction Ignore
     }
 
     Context 'ConvertTo-PSString' {

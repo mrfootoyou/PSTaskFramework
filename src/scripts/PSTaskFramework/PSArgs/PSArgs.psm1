@@ -101,4 +101,12 @@ function ConvertTo-CommandArg {
     }
 }
 
-Export-ModuleMember -Function ConvertTo-PSString, ConvertTo-CommandArg
+# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
+$exportModuleMemberParams = @{
+    Function = @(
+        'ConvertTo-PSString'
+        'ConvertTo-CommandArg'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

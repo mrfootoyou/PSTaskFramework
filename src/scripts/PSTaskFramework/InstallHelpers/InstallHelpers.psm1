@@ -5,9 +5,9 @@
 
 param()
 
-Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/secrets.psm1" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/build-helpers.psm1" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/../PSArgs" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/../Secrets" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/../BuildHelpers" -Scope Global -Verbose:$false
 
 # Canonical install metadata for common tools.
 #
@@ -986,4 +986,15 @@ function Install-PowerShellModule {
     }
 }
 
-Export-ModuleMember -Function Install-PowerShellModule, Get-WellKnownAppInfo, Install-PackageManager, Get-PackageManager, Install-RequiredApp
+# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
+$exportModuleMemberParams = @{
+    Function = @(
+        'Install-PowerShellModule'
+        'Get-WellKnownAppInfo'
+        'Install-PackageManager'
+        'Get-PackageManager'
+        'Install-RequiredApp'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

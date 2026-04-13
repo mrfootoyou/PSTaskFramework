@@ -99,7 +99,7 @@ $ImportScripts = @(
 ####################################################################################
 # Define all tasks
 ####################################################################################
-Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
+Import-Module "$ScriptsDir/PSTaskFramework" -Force -Scope Local -Verbose:$false
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -117,7 +117,7 @@ Task bootstrap -desc 'Installs required tools' {
         evolves, but currently this includes the Pester and PSScriptAnalyzer modules.
     #>
     param()
-    Import-Module "$ScriptsDir/install-helpers.psm1" -Force -Verbose:$false
+    Import-Module InstallHelpers -Force -Verbose:$false
 
     $appsToInstall = [ordered]@{
         'git'        = $null # well-known app
@@ -240,6 +240,11 @@ Task test -desc 'Execute tests' -dependsOn version {
 
     Write-Host "$($PSStyle.Dim)>> Invoke-Pester -Configuration $(ConvertTo-PSString $configuration)"
     & $tempModule Invoke-Pester -Configuration $configuration
+
+    # Reload nested modules since Pester may have unloaded them...
+    Import-Module PSArgs -Scope Global -Verbose:$false
+    Import-Module Secrets -Scope Global -Verbose:$false
+    Import-Module BuildHelpers -Scope Global -Verbose:$false
 
     if ($TestReport -and (Test-Path $ReportPath)) {
         Write-Host "Test report: '$ReportPath'." -ForegroundColor Green

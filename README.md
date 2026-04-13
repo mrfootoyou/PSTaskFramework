@@ -36,11 +36,9 @@ Expected structure within your target repo:
 <repo-root>/
   build.ps1
   scripts/
-    build-helpers.psm1
-    install-helpers.psm1
-    psargs.psm1
-    secrets.psm1
-    task-framework.psm1
+    PSTaskFramework/
+      <script-files> # May omit *.Tests.ps1 files
+    <your-other-scripts>
 ```
 
 ### Requirements
@@ -221,14 +219,13 @@ Notes:
 - `.ps1` script files will be dot-sourced just before task execution.
 - `.psm1`/`.psd1` module files will be imported using `Import-Module -Scope Local` just before task
   execution.
-- The following modules are automatically imported into the global scope when the task-framework is
-  imported, thus these do not need to be explicitly imported within tasks:
-  - `build-helpers.psm1`
-  - `secrets.psm1`
-  - `psargs.psm1`
-- The directory containing the `task-framework` module is temporarily added in the PSModulePath
-  while tasks are executing, so a task can easily import modules from that directory using only the
-  module name, for example, `Import-Module my-task-helpers`.
+- Tasks can load `PSTaskFramework` child module using only the module's name. For example,
+  `Import-Module InstallHelpers` will load the `$ScriptsDir/PSTaskFramework/InstallHelpers` module.
+- The following child modules are automatically imported into the global scope when the
+  PSTaskFramework module is imported, thus these do not need to be explicitly imported within tasks:
+  - `BuildHelpers`
+  - `Secrets`
+  - `PSArgs`
 
 ### Execute tasks
 
@@ -345,11 +342,15 @@ Fix:
 
 If you need to adjust framework behavior (not just tasks), these are the key files:
 
-- `src/scripts/task-framework.psm1`: task registration, dependency ordering, and execution engine.
-- `src/scripts/build-helpers.psm1`: shell invocation and prerequisite helpers used by tasks.
-- `src/scripts/psargs.psm1`: argument-to-command conversion helpers.
-- `src/scripts/secrets.psm1`: secret masking and CI-aware secret input behavior.
-- `src/scripts/install-helpers.psm1`: installation helpers for package and modules.
+- `src/scripts/PSTaskFramework/PSTaskFramework.psm1`: task registration, dependency ordering, and
+  execution engine.
+- `src/scripts/PSTaskFramework/BuildHelpers/BuildHelpers.psm1`: shell invocation and prerequisite
+  helpers used by tasks.
+- `src/scripts/PSTaskFramework/PSArgs/PSArgs.psm1`: argument-to-command conversion helpers.
+- `src/scripts/PSTaskFramework/Secrets/Secrets.psm1`: secret masking and CI-aware secret input
+  behavior.
+- `src/scripts/PSTaskFramework/InstallHelpers/InstallHelpers.psm1`: installation helpers for package
+  and modules.
 
 For most adopters, you should not need to modify the framework modules at all.
 

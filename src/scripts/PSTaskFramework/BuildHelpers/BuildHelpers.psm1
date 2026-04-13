@@ -6,8 +6,8 @@
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingPositionalParameters', 'Invoke-Shell', Justification = 'Invoke-Shell is intended to be used with positional parameters.')]
 param()
 
-Import-Module "$PSScriptRoot/secrets.psm1" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/../Secrets" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/../PSArgs" -Scope Global -Verbose:$false
 
 # Mockable functions for testing purposes. These are not intended to be used directly.
 function getUserId {
@@ -63,7 +63,7 @@ function Assert-AppExists {
 
     # When multiple commands with the same name are found, Get-Command returns
     # them in execution precedence order. So take the first one
-    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore | Select-Object -First 1
+    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore -TotalCount 1
     if (!$cmd) {
         if ($ErrorActionPreference -ne 'Ignore') {
             $appName = $AppTitle ? "$AppTitle ($AppPath)" : $AppPath
@@ -73,7 +73,7 @@ function Assert-AppExists {
         return
     }
     if ($PassThru) {
-        return $cmd.Source
+        return $cmd.Path
     }
 }
 
@@ -138,4 +138,13 @@ function Invoke-Shell {
     }
 }
 
-Export-ModuleMember -Function Test-Administrator, Assert-AppExists, Invoke-Shell
+# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
+$exportModuleMemberParams = @{
+    Function = @(
+        'Test-Administrator'
+        'Assert-AppExists'
+        'Invoke-Shell'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

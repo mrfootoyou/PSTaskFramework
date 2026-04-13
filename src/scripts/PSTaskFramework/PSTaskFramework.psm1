@@ -5,9 +5,9 @@
 
 param()
 
-Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/secrets.psm1" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/build-helpers.psm1" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/PSArgs" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/Secrets" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/BuildHelpers" -Scope Global -Verbose:$false
 
 class TaskDefinition {
     [string]$Name
@@ -443,4 +443,17 @@ Reset-TaskFramework
 
 New-Alias -Name Task -Value Add-TaskFrameworkTask -Force
 
-Export-ModuleMember -Function Reset-TaskFramework, Add-TaskFrameworkTask, Get-TaskFrameworkTasks, Invoke-TaskFramework -Alias Task
+# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
+$exportModuleMemberParams = @{
+    Function = @(
+        'Reset-TaskFramework'
+        'Add-TaskFrameworkTask'
+        'Get-TaskFrameworkTasks'
+        'Invoke-TaskFramework'
+    )
+    Alias    = @(
+        'Task'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams
