@@ -7,48 +7,40 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Mocked functions may have unused parameters.')]
 param()
 
-Set-StrictMode -Version Latest
-
 Describe 'PSTaskFramework.InstallHelpers Module' {
     BeforeAll {
-        $modulePath = Join-Path $PSScriptRoot 'InstallHelpers.psm1'
-        Import-Module $modulePath -Force
+        Import-Module "$PSScriptRoot/InstallHelpers" -Verbose:$false
 
-        $script:addedInstallModuleStub = $false
-        if (-not (Get-Command Install-Module -ErrorAction Ignore)) {
-            function global:Install-Module { param() }
-            $script:addedInstallModuleStub = $true
+        # Mock Install-Module to prevent actual module installation in a poorly written test.
+        Mock Install-Module -ModuleName InstallHelpers {
+            throw 'Install-Module called from unit test!'
         }
     }
 
     BeforeEach {
-        $global:LASTEXITCODE = 0
-        $Error.Clear()
+        # Cache original PATH to restore after tests
+        $script:originalPath = $env:PATH
     }
-
-    AfterAll {
-        Remove-Module -Name InstallHelpers -ErrorAction Ignore
-
-        if ($script:addedInstallModuleStub) {
-            Remove-Item Function:\Install-Module -ErrorAction Ignore
-        }
+    AfterEach {
+        # Restore original PATH after each test
+        $env:PATH = $script:originalPath
     }
 
     Context 'Get-PackageManager' {
         It 'returns supported package managers for current platform with AllSupported' {
-            $result = @(Get-PackageManager -AllSupported | Select-Object -Unique)
-
             $expected = @(
                 if ($IsWindows) { 'winget'; 'choco' }
                 if ($IsLinux) { 'apt'; 'dnf'; 'brew', 'brew:linux' }
                 if ($IsMacOS) { 'brew', 'brew:macos' }
             )
 
+            $result = @(Get-PackageManager -AllSupported)
+
             $result | Should -Be $expected
         }
 
         It 'returns only detected package managers when AllSupported is not specified' {
-            Mock -CommandName Get-Command -ModuleName InstallHelpers -MockWith {
+            Mock Get-Command -ModuleName InstallHelpers {
                 param($Name)
                 if ($Name -in @('winget', 'brew')) {
                     [PSCustomObject]@{ Name = $Name }
@@ -64,39 +56,26 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
             if ($IsLinux) {
                 $result | Should -Contain 'brew'
                 $result | Should -Contain 'brew:linux'
+                $result | Should -Not -Contain 'winget'
             }
             if ($IsMacOS) {
                 $result | Should -Contain 'brew'
                 $result | Should -Contain 'brew:macos'
+                $result | Should -Not -Contain 'winget'
             }
-        }
-
-        It 'returns expected AllSupported list on Windows' -Skip:(-not $IsWindows) {
-            $result = @(Get-PackageManager -AllSupported)
-
-            $result | Should -Be @('winget', 'choco')
-        }
-
-        It 'returns expected AllSupported list on Linux' -Skip:(-not $IsLinux) {
-            $result = @(Get-PackageManager -AllSupported)
-
-            $result | Should -Be @('apt', 'dnf', 'brew', 'brew:linux')
-        }
-
-        It 'returns expected AllSupported list on macOS' -Skip:(-not $IsMacOS) {
-            $result = @(Get-PackageManager -AllSupported)
-
-            $result | Should -Be @('brew', 'brew:macos')
-        }
-
-        It 'returns no package managers for unsupported platforms' -Skip:($IsWindows -or $IsLinux -or $IsMacOS) {
-            $result = @(Get-PackageManager -AllSupported)
-
-            $result | Should -BeEmpty
         }
     }
 
     Context 'Get-WellKnownAppInfo' {
+        It 'returns all app info by default' {
+            $result = Get-WellKnownAppInfo
+
+            $result.Count | Should -BeGreaterThan 1
+            $result.Name | Should -Contain 'dotnet-sdk-10'
+            $result.Name | Should -Contain 'git'
+            $result.Name | Should -Contain 'docker'
+        }
+
         It 'returns app metadata for an exact app name' {
             $result = Get-WellKnownAppInfo -Name 'git'
 
@@ -113,31 +92,37 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
         }
 
         It 'throws for unknown app names with ErrorAction Stop' {
-            { Get-WellKnownAppInfo -Name 'not-a-real-app' -ErrorAction Stop } |
-            Should -Throw "*not-a-real-app*not a well-known app*"
+            { Get-WellKnownAppInfo -Name 'not-a-real-app' -ErrorAction Stop } | `
+                Should -Throw "*not-a-real-app*not a well-known app*"
+        }
+
+        It 'does not throw for unknown wildcard' {
+            $result = Get-WellKnownAppInfo -Name 'not-a-real-app*' -ErrorAction Stop
+
+            $result | Should -BeNullOrEmpty
         }
     }
 
     Context 'Install-PackageManager' {
         It 'installs explicit package manager and returns its name' {
-            Mock -CommandName installWinget -ModuleName InstallHelpers -MockWith { }
+            Mock installWinget -ModuleName InstallHelpers { }
 
             $result = @(Install-PackageManager -PackageManager 'winget')
 
             $result | Should -Contain 'winget'
-            Should -Invoke -CommandName installWinget -ModuleName InstallHelpers -Times 1 -Exactly
+            Should -Invoke installWinget -ModuleName InstallHelpers -Times 1 -Exactly
         }
 
         It 'tries alternates for any and succeeds when a later manager installs' {
-            Mock -CommandName Get-PackageManager -ModuleName InstallHelpers -ParameterFilter { $AllSupported } -MockWith {
+            Mock Get-PackageManager -ModuleName InstallHelpers -ParameterFilter { $AllSupported } {
                 @('winget', 'choco')
             }
 
-            Mock -CommandName installWinget -ModuleName InstallHelpers -MockWith {
+            Mock installWinget -ModuleName InstallHelpers {
                 throw 'winget failed'
             }
 
-            Mock -CommandName installChocolatey -ModuleName InstallHelpers -MockWith { }
+            Mock installChocolatey -ModuleName InstallHelpers { }
 
             $result = @(
                 Install-PackageManager -PackageManager 'any' `
@@ -148,25 +133,25 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
             $warningMessages = @($installWarnings).Message
 
             $result | Should -Contain 'choco'
-            Should -Invoke -CommandName installWinget -ModuleName InstallHelpers -Times 1 -Exactly
-            Should -Invoke -CommandName installChocolatey -ModuleName InstallHelpers -Times 1 -Exactly
+            Should -Invoke installWinget -ModuleName InstallHelpers -Times 1 -Exactly
+            Should -Invoke installChocolatey -ModuleName InstallHelpers -Times 1 -Exactly
             $warningMessages | Should -Contain 'winget failed'
         }
 
         It 'writes an error when any cannot install any supported package manager' {
-            Mock -CommandName Get-PackageManager -ModuleName InstallHelpers -ParameterFilter { $AllSupported } -MockWith {
+            Mock Get-PackageManager -ModuleName InstallHelpers -ParameterFilter { $AllSupported } {
                 @('winget', 'choco')
             }
 
-            Mock -CommandName installWinget -ModuleName InstallHelpers -MockWith {
+            Mock installWinget -ModuleName InstallHelpers {
                 throw 'winget failed'
             }
 
-            Mock -CommandName installChocolatey -ModuleName InstallHelpers -MockWith {
+            Mock installChocolatey -ModuleName InstallHelpers {
                 throw 'choco failed'
             }
 
-            Mock -CommandName Write-Error -ModuleName InstallHelpers -MockWith { }
+            Mock Write-Error -ModuleName InstallHelpers { }
 
             $null = Install-PackageManager -PackageManager 'any' `
                 -ErrorAction SilentlyContinue `
@@ -174,7 +159,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 -WarningVariable installWarnings
             $warningMessages = @($installWarnings).Message
 
-            Should -Invoke -CommandName Write-Error -ModuleName InstallHelpers -Times 1
+            Should -Invoke Write-Error -ModuleName InstallHelpers -Times 1
             $warningMessages | Should -Contain 'winget failed'
             $warningMessages | Should -Contain 'choco failed'
         }
@@ -187,7 +172,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
         }
 
         It 'skips installation for apps that are already up to date' {
-            Mock -CommandName installWithWinget -ModuleName InstallHelpers -MockWith { }
+            Mock installWithWinget -ModuleName InstallHelpers { }
 
             $apps = [ordered]@{
                 'mytool' = [ordered]@{
@@ -200,16 +185,16 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
             Install-RequiredApp -AppsToInstall $apps
 
-            Should -Invoke -CommandName installWithWinget -ModuleName InstallHelpers -Times 0 -Exactly
+            Should -Invoke installWithWinget -ModuleName InstallHelpers -Times 0 -Exactly
         }
 
         It 'uses ordered app method precedence over package manager discovery order' {
-            Mock -CommandName Get-PackageManager -ModuleName InstallHelpers -MockWith {
+            Mock Get-PackageManager -ModuleName InstallHelpers {
                 @('winget', 'choco')
             }
 
-            Mock -CommandName installWithWinget -ModuleName InstallHelpers -MockWith { }
-            Mock -CommandName installWithChocolatey -ModuleName InstallHelpers -MockWith { }
+            Mock installWithWinget -ModuleName InstallHelpers { }
+            Mock installWithChocolatey -ModuleName InstallHelpers { }
 
             $apps = [ordered]@{
                 'mytool' = [ordered]@{
@@ -222,13 +207,13 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
             Install-RequiredApp -AppsToInstall $apps
 
-            Should -Invoke -CommandName installWithChocolatey -ModuleName InstallHelpers -Times 1 -Exactly
-            Should -Invoke -CommandName installWithWinget -ModuleName InstallHelpers -Times 0 -Exactly
+            Should -Invoke installWithChocolatey -ModuleName InstallHelpers -Times 1 -Exactly
+            Should -Invoke installWithWinget -ModuleName InstallHelpers -Times 0 -Exactly
         }
 
         It 'writes an error when no supported installation method is available' {
-            Mock -CommandName Get-PackageManager -ModuleName InstallHelpers -MockWith { @('winget') }
-            Mock -CommandName Write-Error -ModuleName InstallHelpers -MockWith { }
+            Mock Get-PackageManager -ModuleName InstallHelpers { @('winget') }
+            Mock Write-Error -ModuleName InstallHelpers { }
 
             $apps = [ordered]@{
                 'mytool' = [ordered]@{
@@ -240,11 +225,202 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
             Install-RequiredApp -AppsToInstall $apps -ErrorAction SilentlyContinue
 
-            Should -Invoke -CommandName Write-Error -ModuleName InstallHelpers -Times 1
+            Should -Invoke Write-Error -ModuleName InstallHelpers -Times 1
         }
     }
 
     Context 'Internal helper functions' {
+        Context 'installWinget' {
+            It 'should throw on non-Windows' -Skip:$IsWindows {
+                InModuleScope 'InstallHelpers' {
+                    { installWinget } | Should -Throw '*not supported*'
+                }
+            }
+
+            It 'should not install when already installed' -Skip:(-not $IsWindows) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'winget' } {
+                        @{Path = 'C:\winget.exe' }
+                    }
+
+                    installWinget
+
+                    Should -InvokeVerifiable
+                }
+            }
+
+            It 'should install on Windows with refreshed path' -Skip:(-not $IsWindows) {
+                InModuleScope 'InstallHelpers' {
+                    $script:wingetInstalled = $false
+                    Mock -Verifiable Get-Command -param { $name -eq 'winget' } { $script:wingetInstalled ? @{Path = 'C:\winget.exe' } : $null }
+                    Mock -Verifiable Get-AppxPackage { [PSCustomObject]@{ PackageFamilyName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe' } }
+                    Mock -Verifiable Add-AppxPackage { }
+                    Mock -Verifiable refreshEnvironment { $script:wingetInstalled = $true }
+
+                    installWinget
+
+                    Should -InvokeVerifiable
+                    Should -Invoke Get-Command -Times 3 -Exactly
+                }
+            }
+
+            It 'should fail when Get-AppXPackage not found' -Skip:(-not $IsWindows) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'winget' } { $null }
+                    Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'Get-AppxPackage' } { $null }
+
+                    { installWinget } | Should -Throw '*Your version of Windows may not support Winget*'
+
+                    Should -InvokeVerifiable
+                }
+            }
+            It 'should fail when App Installer package not found' -Skip:(-not $IsWindows) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'winget' } { $null }
+                    Mock -Verifiable Get-AppxPackage { }
+
+                    { installWinget } | Should -Throw '*Install ''App Installer'' from the Microsoft Store*'
+
+                    Should -InvokeVerifiable
+                }
+            }
+            It 'should fail when Add-AppxPackage fails' -Skip:(-not $IsWindows) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'winget' } { $null }
+                    Mock -Verifiable Get-AppxPackage { [PSCustomObject]@{ PackageFamilyName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe' } }
+                    Mock -Verifiable Add-AppxPackage { Write-Error "failed" }
+
+                    { installWinget } | Should -Throw '*failed to re-register ''App Installer'' package*'
+
+                    Should -InvokeVerifiable
+                }
+            }
+        }
+
+        Context 'installChocolatey' {
+            It 'should throw on non-Windows' -Skip:$IsWindows {
+                InModuleScope 'InstallHelpers' {
+                    { installChocolatey } | Should -Throw '*not supported*'
+                }
+            }
+
+            It 'should not install when already installed' -Skip:(-not $IsWindows) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'choco' } {
+                        @{Path = 'C:\choco.exe' }
+                    }
+
+                    installChocolatey
+
+                    Should -InvokeVerifiable
+                }
+            }
+
+            It 'should install on Windows' -Skip:(-not $IsWindows) {
+                InModuleScope 'InstallHelpers' {
+                    $script:installed = $false
+                    Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'choco' } {
+                        $script:installed ? @{Path = 'C:\choco.exe' } : $null
+                    }
+                    Mock -Verifiable Get-ExecutionPolicy { 'Restricted' }
+                    Mock -Verifiable Set-ExecutionPolicy -param { $Scope -eq 'Process' -and $ExecutionPolicy -eq 'RemoteSigned' -and $Force } { }
+                    Mock -Verifiable Invoke-WebRequest -param { $Uri -like 'https://*chocolatey.org/install.ps1' } {
+                        [PSCustomObject]@{ Content = 'choco install script' }
+                    }
+                    Mock -Verifiable Invoke-Expression -param { $Command -eq 'choco install script' } { }
+                    Mock -Verifiable refreshEnvironment { $script:installed = $true }
+
+                    installChocolatey
+
+                    Should -InvokeVerifiable
+                }
+            }
+        }
+
+        Context 'installApt' {
+            It 'should throw on Windows' -Skip:($IsMacOS -or $IsLinux) {
+                InModuleScope 'InstallHelpers' {
+                    { installApt } | Should -Throw '*not supported*'
+                }
+            }
+
+            It 'should succeed when apt-get already installed' -Skip:(-not ($IsMacOS -or $IsLinux)) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -param { $name -eq 'apt-get' } { @{Path = "/usr/bin/apt-get" } }
+
+                    installApt
+
+                    Should -InvokeVerifiable
+                }
+            }
+
+            It 'should fail when apt-get is not installed' -Skip:(-not ($IsMacOS -or $IsLinux)) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -param { $name -eq 'apt-get' } { $null }
+
+                    { installApt } | Should -Throw '*Manually install APT and try again*'
+
+                    Should -InvokeVerifiable
+                }
+            }
+        }
+
+        Context 'installDNF' {
+            It 'should throw on Windows' -Skip:($IsMacOS -or $IsLinux) {
+                InModuleScope 'InstallHelpers' {
+                    { installDNF } | Should -Throw '*not supported*'
+                }
+            }
+
+            It 'should succeed when dnf already installed' -Skip:(-not ($IsMacOS -or $IsLinux)) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -param { $name -eq 'dnf' } { @{Path = "/usr/bin/dnf" } }
+
+                    installDNF
+
+                    Should -InvokeVerifiable
+                }
+            }
+
+            It 'should fail when dnf is not installed' -Skip:(-not ($IsMacOS -or $IsLinux)) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -param { $name -eq 'dnf' } { $null }
+
+                    { installDNF } | Should -Throw '*Manually install DNF and try again*'
+
+                    Should -InvokeVerifiable
+                }
+            }
+        }
+
+        Context 'installBrew' {
+            It 'should throw on Windows' -Skip:($IsMacOS -or $IsLinux) {
+                InModuleScope 'InstallHelpers' {
+                    { installBrew } | Should -Throw '*not supported*'
+                }
+            }
+
+            It 'should succeed when brew already installed' -Skip:(-not ($IsMacOS -or $IsLinux)) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -param { $name -eq 'brew' } { @{Path = "/usr/bin/brew" } }
+
+                    installBrew
+
+                    Should -InvokeVerifiable
+                }
+            }
+
+            It 'should fail when brew is not installed' -Skip:(-not ($IsMacOS -or $IsLinux)) {
+                InModuleScope 'InstallHelpers' {
+                    Mock -Verifiable Get-Command -param { $name -eq 'brew' } { $null }
+
+                    { installBrew } | Should -Throw '*Manually install Homebrew*'
+
+                    Should -InvokeVerifiable
+                }
+            }
+        }
+
         It 'installWithPackageManager batches package ids and executes custom methods' {
             InModuleScope 'InstallHelpers' {
                 $script:execCalls = @()
@@ -295,16 +471,16 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                     }
                 )
 
-                { installWithPackageManager -AppsToInstall $apps -MethodName 'winget' -PackageManagerName 'Winget' -Execute {} -InstallPackages {} } |
-                Should -Throw '*Unexpected installation type*'
+                { installWithPackageManager -AppsToInstall $apps -MethodName 'winget' -PackageManagerName 'Winget' -Execute {} -InstallPackages {} } | `
+                    Should -Throw '*Unexpected installation type*'
             }
         }
 
         It 'installWithWinget applies default flags and resets LASTEXITCODE' {
             InModuleScope 'InstallHelpers' {
                 $script:wingetCalls = @()
-                Mock -CommandName Invoke-Shell -ModuleName InstallHelpers -MockWith {
-                    param($Command, $CommandArgs, $NoEcho, $AllowedExitCodes)
+                Mock Invoke-Shell {
+                    param($Command, $CommandArgs, $AllowedExitCodes)
                     $script:wingetCalls += , [PSCustomObject]@{
                         Command          = $Command
                         CommandArgs      = @($CommandArgs)
@@ -323,23 +499,80 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 installWithWinget -AppsToInstall $apps
 
-                Should -Invoke -CommandName Invoke-Shell -ModuleName InstallHelpers -Times 1 -Exactly
+                Should -Invoke Invoke-Shell -Times 1 -Exactly
                 $global:LASTEXITCODE | Should -Be 0
                 $script:wingetCalls[0].Command | Should -BeExactly 'winget'
-                $script:wingetCalls[0].CommandArgs | Should -Contain 'install'
-                $script:wingetCalls[0].CommandArgs | Should -Contain '--exact'
-                $script:wingetCalls[0].CommandArgs | Should -Contain '--silent'
-                $script:wingetCalls[0].CommandArgs | Should -Contain '--force'
-                $script:wingetCalls[0].CommandArgs | Should -Contain '--accept-package-agreements'
-                $script:wingetCalls[0].CommandArgs | Should -Contain '--accept-source-agreements'
+                $script:wingetCalls[0].CommandArgs | Should -BeExactly @('install', '--exact', 'Git.Git', '--silent', '--force', '--accept-package-agreements', '--accept-source-agreements')
+            }
+        }
+
+        It 'installWithChocolatey as admin applies default flags and resets LASTEXITCODE' {
+            InModuleScope 'InstallHelpers' {
+                $script:chocoCalls = @()
+                Mock Test-Administrator { $true }
+                Mock Invoke-Shell {
+                    param($Command, $CommandArgs, $AllowedExitCodes)
+                    $script:chocoCalls += , [PSCustomObject]@{
+                        Command          = $Command
+                        CommandArgs      = @($CommandArgs)
+                        AllowedExitCodes = @($AllowedExitCodes)
+                    }
+                    $global:LASTEXITCODE = 0
+                }
+
+                $global:LASTEXITCODE = 99
+                $apps = @(
+                    [PSCustomObject]@{
+                        Name = 'git'
+                        Info = @{ choco = 'git' }
+                    }
+                )
+
+                installWithChocolatey -AppsToInstall $apps
+
+                Should -Invoke Invoke-Shell -Times 1 -Exactly
+                $global:LASTEXITCODE | Should -Be 0
+                $script:chocoCalls[0].Command | Should -BeExactly 'choco'
+                $script:chocoCalls[0].CommandArgs | Should -BeExactly @('upgrade', 'git', '--yes')
+            }
+        }
+
+        It 'installWithChocolatey as non-admin uses Start-Process' {
+            InModuleScope 'InstallHelpers' {
+                $script:spCalls = @()
+                Mock Test-Administrator { $false }
+                Mock Assert-AppExists { 'c:\path\to\choco.exe' }
+                Mock Start-Process {
+                    param($FilePath, $ArgumentList, $Verb)
+                    $script:spCalls += , [PSCustomObject]@{
+                        FilePath     = $FilePath
+                        ArgumentList = @($ArgumentList)
+                        Verb         = $Verb
+                    }
+                    [PSCustomObject]@{ ExitCode = 2 } # nothing to do
+                }
+
+                $apps = @(
+                    [PSCustomObject]@{
+                        Name = 'foo-app'
+                        Info = @{ choco = 'foo' }
+                    }
+                )
+
+                installWithChocolatey -AppsToInstall $apps
+
+                Should -Invoke Start-Process -Times 1 -Exactly
+                $global:LASTEXITCODE | Should -Be 0
+                $script:spCalls[0].FilePath | Should -BeExactly 'c:\path\to\choco.exe'
+                $script:spCalls[0].ArgumentList | Should -BeExactly @('upgrade', 'foo', '--yes')
             }
         }
 
         It 'installWithAPT runs update once then installs all packages with yes flag' {
             InModuleScope 'InstallHelpers' {
                 $script:aptCalls = @()
-                Mock -CommandName Invoke-Shell -ModuleName InstallHelpers -MockWith {
-                    param($Command, $CommandArgs, $NoEcho, $AllowedExitCodes)
+                Mock Invoke-Shell {
+                    param($Command, $CommandArgs, $AllowedExitCodes)
                     $script:aptCalls += , [PSCustomObject]@{
                         Command     = $Command
                         CommandArgs = @($CommandArgs)
@@ -354,15 +587,79 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 installWithAPT -AppsToInstall $apps
 
-                Should -Invoke -CommandName Invoke-Shell -ModuleName InstallHelpers -Times 2 -Exactly
+                Should -Invoke Invoke-Shell -Times 2 -Exactly
                 $script:aptCalls[0].Command | Should -BeExactly 'sudo'
-                $script:aptCalls[0].CommandArgs | Should -Be @('apt-get', 'update', '-y')
+                $script:aptCalls[0].CommandArgs | Should -BeExactly @('apt-get', 'update', '-y')
                 $script:aptCalls[1].Command | Should -BeExactly 'sudo'
-                $script:aptCalls[1].CommandArgs | Should -Contain 'apt-get'
-                $script:aptCalls[1].CommandArgs | Should -Contain 'install'
-                $script:aptCalls[1].CommandArgs | Should -Contain '--yes'
-                $script:aptCalls[1].CommandArgs | Should -Contain 'git'
-                $script:aptCalls[1].CommandArgs | Should -Contain 'curl'
+                $script:aptCalls[1].CommandArgs | Should -BeExactly @('apt-get', 'install', 'git', 'curl', '--yes')
+            }
+        }
+
+        It 'installWithDNF installs all packages with yes flag' {
+            InModuleScope 'InstallHelpers' {
+                $script:dnfCalls = @()
+                Mock Invoke-Shell {
+                    param($Command, $CommandArgs, $AllowedExitCodes)
+                    $script:dnfCalls += , [PSCustomObject]@{
+                        Command     = $Command
+                        CommandArgs = @($CommandArgs)
+                    }
+                    $global:LASTEXITCODE = 0
+                }
+
+                $apps = @(
+                    [PSCustomObject]@{ Name = 'git'; Info = @{ dnf = 'git' } }
+                    [PSCustomObject]@{ Name = 'curl'; Info = @{ dnf = 'curl' } }
+                )
+
+                installWithDNF -AppsToInstall $apps
+
+                Should -Invoke Invoke-Shell -Times 1 -Exactly
+                $script:dnfCalls[0].Command | Should -BeExactly 'sudo'
+                $script:dnfCalls[0].CommandArgs | Should -BeExactly @('dnf', 'install', 'git', 'curl', '-y')
+            }
+        }
+
+        It 'installWithBrew installs all packages with yes flag' {
+            InModuleScope 'InstallHelpers' {
+                $script:brewCalls = @()
+                Mock Invoke-Shell {
+                    param($Command, $CommandArgs, $AllowedExitCodes)
+                    $script:brewCalls += , [PSCustomObject]@{
+                        Command     = $Command
+                        CommandArgs = @($CommandArgs)
+                    }
+                    if ($CommandArgs[0] -eq 'list' -and $CommandArgs[1] -eq 'git') {
+                        $global:LASTEXITCODE = 1 # not installed
+                    }
+                    elseif ($CommandArgs[0] -eq 'upgrade' -and $CommandArgs[1] -eq 'curl') {
+                        $global:LASTEXITCODE = 1 # nothing to upgrade
+                    }
+                    else {
+                        $global:LASTEXITCODE = 0
+                    }
+                }
+
+                $apps = @(
+                    [PSCustomObject]@{ Name = 'git'; Info = @{ brew = 'git' } }
+                    [PSCustomObject]@{ Name = 'curl'; Info = @{ brew = 'curl' } }
+                )
+
+                installWithBrew -AppsToInstall $apps
+
+                Should -Invoke Invoke-Shell -Times 6 -Exactly
+                $script:brewCalls[0].Command | Should -BeExactly 'brew'
+                $script:brewCalls[0].CommandArgs | Should -BeExactly @('list', 'git')
+                $script:brewCalls[1].Command | Should -BeExactly 'brew'
+                $script:brewCalls[1].CommandArgs | Should -BeExactly @('update')
+                $script:brewCalls[2].Command | Should -BeExactly 'brew'
+                $script:brewCalls[2].CommandArgs | Should -BeExactly @('install', 'git', '--quiet')
+                $script:brewCalls[3].Command | Should -BeExactly 'brew'
+                $script:brewCalls[3].CommandArgs | Should -BeExactly @('list', 'curl')
+                $script:brewCalls[4].Command | Should -BeExactly 'brew'
+                $script:brewCalls[4].CommandArgs | Should -BeExactly @('upgrade', 'curl', '--quiet')
+                $script:brewCalls[5].Command | Should -BeExactly 'brew'
+                $script:brewCalls[5].CommandArgs | Should -BeExactly @('list', 'curl')
             }
         }
 
@@ -385,67 +682,160 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 $script:ran | Should -Be @('app1', 'app2')
             }
         }
+    }
 
-        It 'isPowerShellUpToDate caches latest version response and avoids a second web request' {
+    Context "isPowerShellUpToDate" {
+        It 'caches last version response' {
             InModuleScope 'InstallHelpers' {
-                Mock -CommandName Invoke-WebRequest -ModuleName InstallHelpers -MockWith {
+                $latestVersion = $PSVersionTable.PSVersion.ToString()
+                Mock Invoke-WebRequest {
                     [PSCustomObject]@{
                         StatusCode = 302
-                        Headers    = @{ Location = @("https://github.com/PowerShell/PowerShell/releases/tag/v$($PSVersionTable.PSVersion)") }
+                        Headers    = @{ Location = @("https://github.com/PowerShell/PowerShell/releases/tag/v$latestVersion") }
                     }
                 }
 
-                $info = [ordered]@{
+                $appInfo = [ordered]@{
+                }
+
+                isPowerShellUpToDate 'powershell' $appInfo | Should -BeTrue
+
+                Should -Invoke Invoke-WebRequest -Times 1 -Exactly
+                $appInfo.LatestVersion.ToString() | Should -BeExactly $latestVersion
+                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+            }
+        }
+        It 'uses cached latest version when NextVersionCheck is in the future' {
+            InModuleScope 'InstallHelpers' {
+                Mock Invoke-WebRequest { }
+
+                $latestVersion = $PSVersionTable.PSVersion.ToString()
+                $appInfo = [ordered]@{
+                    LatestVersion    = $latestVersion
+                    NextVersionCheck = [DateTime]::Now.AddMinutes(1) # future
+                }
+
+                isPowerShellUpToDate 'powershell' $appInfo | Should -BeTrue
+
+                Should -Invoke Invoke-WebRequest -Times 0 -Exactly
+            }
+        }
+        It 'return false when a newer version exists' {
+            InModuleScope 'InstallHelpers' {
+                $latestVersion = [version]::new($PSVersionTable.PSVersion.Major, $PSVersionTable.PSVersion.Minor + 1, 0).ToString()
+                Mock Invoke-WebRequest {
+                    [PSCustomObject]@{
+                        StatusCode = 302
+                        Headers    = @{ Location = @("https://github.com/PowerShell/PowerShell/releases/tag/v$latestVersion") }
+                    }
+                }
+
+                $appInfo = [ordered]@{
+                    LatestVersion    = '1.0.0'
                     NextVersionCheck = [DateTime]::Now.AddMinutes(-1)
                 }
 
-                (& isPowerShellUpToDate 'powershell' $info) | Should -BeTrue
-                (& isPowerShellUpToDate 'powershell' $info) | Should -BeTrue
+                isPowerShellUpToDate 'powershell' $appInfo | Should -BeFalse
 
-                Should -Invoke -CommandName Invoke-WebRequest -ModuleName InstallHelpers -Times 1 -Exactly
-                $info.LatestVersion.ToString() | Should -BeExactly $PSVersionTable.PSVersion.ToString()
+                Should -Invoke Invoke-WebRequest -Times 1 -Exactly
+                $appInfo.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+            }
+        }
+        It 'uses cached latest version when web request fails' {
+            InModuleScope 'InstallHelpers' {
+                Mock Invoke-WebRequest {
+                    Write-Error "Web request failed" -ErrorAction SilentlyContinue
+                    [PSCustomObject]@{ StatusCode = 501 }
+                }
+
+                $latestVersion = $PSVersionTable.PSVersion.ToString()
+                $appInfo = [ordered]@{
+                    LatestVersion    = $latestVersion
+                    NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                }
+
+                $WarningPreference = 'Ignore'
+                $result = isPowerShellUpToDate 'powershell' $appInfo
+
+                $result | Should -BeTrue
+                Should -Invoke Invoke-WebRequest -Times 1 -Exactly
+                $appInfo.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+            }
+        }
+        It 'uses cached latest version when web request does not return 302' {
+            InModuleScope 'InstallHelpers' {
+                Mock Invoke-WebRequest {
+                    [PSCustomObject]@{ StatusCode = 200 }
+                }
+
+                $latestVersion = $PSVersionTable.PSVersion.ToString()
+                $appInfo = [ordered]@{
+                    LatestVersion    = $latestVersion
+                    NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                }
+
+                $WarningPreference = 'Ignore'
+                (& isPowerShellUpToDate 'powershell' $appInfo) | Should -BeTrue
+
+                Should -Invoke Invoke-WebRequest -Times 1 -Exactly
+                $appInfo.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+            }
+        }
+    }
+
+    Context 'refreshEnvironment' {
+        It 'refreshes the PATH variable' {
+            inModuleScope 'InstallHelpers' {
+                $env:PATH += ";$TestDrive"
+
+                refreshEnvironment
+
+                $env:PATH -split ';' | Should -Not -Contain $TestDrive
             }
         }
     }
 
     Context 'Install-PowerShellModule' {
         It 'does not install modules that already satisfy minimum version' {
-            Mock -CommandName Get-Module -ModuleName InstallHelpers -MockWith {
+            Mock Get-Module -ModuleName InstallHelpers {
                 [PSCustomObject]@{ Version = [version]'5.2.0' }
             }
 
-            Mock -CommandName Install-Module -ModuleName InstallHelpers -MockWith { }
+            Mock Install-Module -ModuleName InstallHelpers { }
 
             Install-PowerShellModule -ModuleVersions @{ Pester = [version]'5.1.0' }
 
-            Should -Invoke -CommandName Install-Module -ModuleName InstallHelpers -Times 0 -Exactly
+            Should -Invoke Install-Module -ModuleName InstallHelpers -Times 0 -Exactly
         }
 
         It 'installs modules when minimum version is missing' {
             $script:getModuleCallCount = 0
 
-            Mock -CommandName Get-Module -ModuleName InstallHelpers -MockWith {
+            Mock Get-Module -ModuleName InstallHelpers {
                 $script:getModuleCallCount++
                 if ($script:getModuleCallCount -ge 2) {
                     [PSCustomObject]@{ Version = [version]'5.1.0' }
                 }
             }
 
-            Mock -CommandName Install-Module -ModuleName InstallHelpers -MockWith { }
+            Mock Install-Module -ModuleName InstallHelpers { }
 
             Install-PowerShellModule -ModuleVersions @{ Pester = [version]'5.1.0' }
 
-            Should -Invoke -CommandName Install-Module -ModuleName InstallHelpers -Times 1 -Exactly
+            Should -Invoke Install-Module -ModuleName InstallHelpers -Times 1 -Exactly
         }
 
         It 'writes an error when installation does not produce required version' {
-            Mock -CommandName Get-Module -ModuleName InstallHelpers -MockWith { $null }
-            Mock -CommandName Install-Module -ModuleName InstallHelpers -MockWith { }
-            Mock -CommandName Write-Error -ModuleName InstallHelpers -MockWith { }
+            Mock Get-Module -ModuleName InstallHelpers { $null }
+            Mock Install-Module -ModuleName InstallHelpers { }
+            Mock Write-Error -ModuleName InstallHelpers { }
 
             Install-PowerShellModule -ModuleVersions @{ Pester = [version]'5.1.0' } -ErrorAction SilentlyContinue
 
-            Should -Invoke -CommandName Write-Error -ModuleName InstallHelpers -Times 1
+            Should -Invoke Write-Error -ModuleName InstallHelpers -Times 1
         }
     }
 }

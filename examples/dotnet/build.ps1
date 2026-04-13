@@ -115,7 +115,8 @@ $ImportScripts = @(
 ####################################################################################
 # Define all tasks
 ####################################################################################
-Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+Reset-TaskFramework
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -133,7 +134,7 @@ Task bootstrap -desc 'Installs required tools' {
         - PowerShell 7.4 or later (assumed to be already be installed).
     #>
     param()
-    Import-Module "$ScriptsDir/install-helpers.psm1" -Verbose:$false
+    Import-Module InstallHelpers -Verbose:$false
 
     $appsToInstall = [ordered]@{
         'git'           = $null # well-known app
@@ -146,7 +147,7 @@ Task bootstrap -desc 'Installs required tools' {
 
 Task version -desc 'Display tool versions' {
     [PSCustomObject]@{
-        '.NET SDK'    = Invoke-Shell -NoEcho -- dotnet --version
+        '.NET SDK'    = Invoke-Shell -InformationAction Ignore -- dotnet --version
         'PowerShell'  = $PSVersionTable.PSVersion
         'OS Platform' = "$($PSVersionTable.OS) ($($PSVersionTable.Platform))"
         'RepoRoot'    = $RepoRoot
@@ -503,7 +504,7 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
     $NugetSourceName = $null
     if (!$NugetSource) {
         # is there a default push source configured...
-        $dps = Invoke-Shell -noEcho -ea Ignore -- dotnet nuget config get DefaultPushSource 2>&1
+        $dps = Invoke-Shell -InformationAction Ignore -ErrorAction Ignore -- dotnet nuget config get DefaultPushSource 2>&1
         if ($global:LASTEXITCODE -eq 0) {
             $NugetSource = $dps.Trim()
         }
@@ -553,4 +554,5 @@ Invoke-TaskFramework `
     -Variables $Variables `
     -ImportScripts $ImportScripts `
     -ExitOnError `
+    -InformationAction Continue `
     -Verbose:($VerbosePreference -eq 'Continue')

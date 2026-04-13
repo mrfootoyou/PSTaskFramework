@@ -5,9 +5,9 @@
 
 param()
 
-Import-Module "$PSScriptRoot/../PSArgs" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/../Secrets" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/../BuildHelpers" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/../PSArgs" -Verbose:$false
+Import-Module "$PSScriptRoot/../Secrets" -Verbose:$false
+Import-Module "$PSScriptRoot/../BuildHelpers" -Verbose:$false
 
 # Canonical install metadata for common tools.
 #
@@ -247,7 +247,7 @@ function installAPT {
         return
     }
 
-    if (Get-Command 'apt' -ErrorAction Ignore) {
+    if (Get-Command 'apt-get' -ErrorAction Ignore) {
         Write-Information "$($PSStyle.Foreground.Green)APT (Advanced Package Tool) is already installed.$($PSStyle.Reset)"
         return
     }
@@ -414,11 +414,11 @@ function installWithChocolatey {
                 default { $_ }
             }
 
-            Write-Host 'Running Chocolatey as administrator. Expect a prompt.' -ForegroundColor Yellow
+            Write-Information "$($PSStyle.Foreground.Yellow)Running Chocolatey as administrator. Expect a prompt.$($PSStyle.Reset)"
 
             # simulate Invoke-Shell behavior
             $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $($cmdArgs -join ' ')"
-            Write-Host "$($PSStyle.Dim)>> $cmdText$($PSStyle.Reset)"
+            Write-Information "$($PSStyle.Dim)>> $cmdText$($PSStyle.Reset)"
 
             $ps = Start-Process $cmdPath -ArgumentList $cmdArgs -Verb RunAs -Wait -PassThru
             if ($ps.ExitCode -notin $allowedExitCodes) {
@@ -483,7 +483,7 @@ function installWithDNF {
             $dnfArgs += '-y'
         }
 
-        Invoke-Shell -- dnf @dnfArgs
+        Invoke-Shell -- sudo dnf @dnfArgs
     }
 
     $pmArgs = @{
@@ -523,7 +523,7 @@ function installWithBrew {
         # Homebrew doesn't have an "upgrade or install" command, so we have to
         # check if each package is already installed and choose the command accordingly.
         foreach ($packageId in $args) {
-            $null = Invoke-Shell -noEcho -ea Ignore -- brew list $packageId 2>&1
+            $null = Invoke-Shell -InformationAction Ignore -ErrorAction Ignore -- brew list $packageId 2>&1
             $action = $global:LASTEXITCODE -eq 0 ? 'upgrade' : 'install'
 
             & $brewExec -- $action $packageId
@@ -532,7 +532,7 @@ function installWithBrew {
             if ($global:LASTEXITCODE -ne 0) {
                 # Check if it was a real failure or just Homebrew being pedantic
                 $saved = $global:LASTEXITCODE
-                $null = Invoke-Shell -noEcho -ea Ignore -- brew list $packageId 2>&1
+                $null = Invoke-Shell -InformationAction Ignore -ErrorAction Ignore -- brew list $packageId 2>&1
                 if ($global:LASTEXITCODE -ne 0) {
                     $global:LASTEXITCODE = $saved
                 }
