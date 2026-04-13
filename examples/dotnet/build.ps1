@@ -109,7 +109,6 @@ $Variables = @{
 
 # These scripts will be imported into each task prior to execution.
 $ImportScripts = @(
-    Join-Path $ScriptsDir 'build-helpers.psm1'
     # Add more scripts here as needed
 )
 
@@ -520,7 +519,6 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
         $NugetSource
     )
 
-    Import-Module "$RepoRoot/scripts/secrets.psm1" -Scope Global -Verbose:$false
     if (-not $ApiKey) {
         $ApiKey = Read-Secret "Enter API key for pushing packages to $NugetSourceName"
     }

@@ -206,9 +206,12 @@ sometimes we have scripts that are used frequently by many tasks, resulting in l
 To avoid this, any scripts listed in the `$ImportScripts` array will automatically be imported into
 each task prior to execution.
 
+For example, if we have a `my-task-helpers.ps1` script with common helper functions for tasks, we
+can add it to the `$ImportScripts` array like this:
+
 ```powershell
 $ImportScripts = @(
-    Join-Path $ScriptsDir 'build-helpers.ps1' # includes the Invoke-Shell function
+    Join-Path $ScriptsDir 'my-task-helpers.ps1'
     # Add more scripts here as needed
 )
 ```
@@ -218,6 +221,11 @@ Notes:
 - `.ps1` script files will be dot-sourced just before task execution.
 - `.psm1`/`.psd1` module files will be imported using `Import-Module -Scope Local` just before task
   execution.
+- The following modules are automatically imported into the global scope when the task-framework is
+  imported, thus these do not need to be explicitly imported within tasks:
+  - `build-helpers.psm1`
+  - `secrets.psm1`
+  - `psargs.psm1`
 
 ### Execute tasks
 

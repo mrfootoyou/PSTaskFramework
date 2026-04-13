@@ -6,6 +6,8 @@
 param()
 
 Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/secrets.psm1" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/build-helpers.psm1" -Scope Global -Verbose:$false
 
 class TaskDefinition {
     [string]$Name

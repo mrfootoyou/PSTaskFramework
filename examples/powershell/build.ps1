@@ -93,7 +93,6 @@ $Variables = @{
 
 # These scripts will be imported into each task prior to execution.
 $ImportScripts = @(
-    Join-Path $ScriptsDir 'build-helpers.psm1'
     # Add more scripts here as needed
 )
 
