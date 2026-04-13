@@ -1,0 +1,48 @@
+name: PR Validation
+
+on:
+  pull_request:
+  workflow_dispatch: # Allow manual triggering of the workflow for testing purposes
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-analysis:
+    name: Test and Analysis (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Bootstrap dependencies
+        shell: pwsh
+        run: ./build.ps1 bootstrap
+
+      - name: Run tests with coverage
+        shell: pwsh
+        run: ./build.ps1 test -CoverageReport
+
+      - name: Run static analysis with SARIF output
+        shell: pwsh
+        run: ./build.ps1 analysis -CreateSarifReport
+
+      - name: Upload coverage and SARIF to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          disable_search: true
+          files: |
+            ./artifacts/results/coverage.cobertura.xml
+            ./artifacts/results/analysis.sarif
+          flags: ${{ matrix.os }}
+          name: ${{ matrix.os }}-reports
