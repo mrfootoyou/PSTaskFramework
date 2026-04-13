@@ -226,6 +226,9 @@ Notes:
   - `build-helpers.psm1`
   - `secrets.psm1`
   - `psargs.psm1`
+- The directory containing the `task-framework` module is temporarily added in the PSModulePath
+  while tasks are executing, so a task can easily import modules from that directory using only the
+  module name, for example, `Import-Module my-task-helpers`.
 
 ### Execute tasks
 

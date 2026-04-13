@@ -384,14 +384,24 @@ function Invoke-TaskFramework {
     )
     $ErrorActionPreference = 'Stop'
 
+    $private:_orig = @{
+        PSModulePath = $env:PSModulePath
+        Location     = Get-Location
+    }
+
     Write-Verbose "Working directory: '$WorkingDirectory'."
-    Push-Location $WorkingDirectory
+    Set-Location $WorkingDirectory
     try {
         if ($TaskArgs.Count -gt 0 -and $TaskName.Count -gt 1) {
             throw 'Task arguments cannot be used when invoking multiple tasks.'
         }
 
         $TasksToExecute = [TaskDefinition]::GetOrderedTasks($TaskName, !$SkipDependencies)
+
+        # Add the scripts directory to the module path so that task actions
+        # can more easily import helper modules if needed.
+        $pathSeparator = $IsWindows ? ';' : ':'
+        $env:PSModulePath = "$PSScriptRoot$pathSeparator$env:PSModulePath"
 
         $private:targs = @{
             Task          = $null
@@ -423,7 +433,8 @@ function Invoke-TaskFramework {
         throw
     }
     finally {
-        Pop-Location
+        $env:PSModulePath = $_orig.PSModulePath
+        Set-Location $_orig.Location
     }
 }
 
