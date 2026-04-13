@@ -108,5 +108,17 @@ Describe 'build-helpers.ps1' {
 
             Test-Administrator | Should -BeFalse
         }
+
+        It 'matches Windows principal admin evaluation' -Skip:(-not $IsWindows) {
+            $expected = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+            Test-Administrator | Should -Be $expected
+        }
+
+        It 'matches Unix uid root evaluation' -Skip:$IsWindows {
+            $expected = (id -u) -eq 0
+
+            Test-Administrator | Should -Be $expected
+        }
     }
 }
