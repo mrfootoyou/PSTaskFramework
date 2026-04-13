@@ -1,5 +1,8 @@
 # PSTaskFramework
 
+[![pr_validation](https://github.com/mrfootoyou/PSTaskFramework/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/mrfootoyou/PSTaskFramework/actions/workflows/pr-validation.yml)
+[![codecov](https://codecov.io/gh/mrfootoyou/PSTaskFramework/graph/badge.svg?token=DROsxp0TrB)](https://codecov.io/gh/mrfootoyou/PSTaskFramework)
+
 A fast, lightweight, easy-to-use **build automation tool** built on **modern PowerShell**. It is
 **cross-platform** by design and intended to work anywhere PowerShell 7+ is supported (Windows,
 Linux, and macOS).
