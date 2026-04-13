@@ -325,7 +325,7 @@ function installWithPackageManager {
             }
         }
         else {
-            throw "Unexpected installation type for '$appName'['$MethodName']: [$($method.GetType().FullName)]."
+            throw "Unexpected installation type for '$appName'['$MethodName']: [$($null -eq $method ? '$null' : $method.GetType().FullName)]."
         }
     }
     if ($packageIds) {
@@ -572,7 +572,7 @@ function installWithScript {
             }
         }
         else {
-            throw "Unexpected installation type for '$appName'['$MethodName']: [$($method.GetType().FullName)]."
+            throw "Unexpected installation type for '$appName'['$MethodName']: [$($null -eq $method ? '$null' : $method.GetType().FullName)]."
         }
     }
 }
