@@ -70,6 +70,30 @@ Describe 'install-helpers.psm1' {
                 $result | Should -Contain 'brew:macos'
             }
         }
+
+        It 'returns expected AllSupported list on Windows' -Skip:(-not $IsWindows) {
+            $result = @(Get-PackageManager -AllSupported)
+
+            $result | Should -Be @('winget', 'choco')
+        }
+
+        It 'returns expected AllSupported list on Linux' -Skip:(-not $IsLinux) {
+            $result = @(Get-PackageManager -AllSupported)
+
+            $result | Should -Be @('apt', 'dnf', 'brew', 'brew:linux')
+        }
+
+        It 'returns expected AllSupported list on macOS' -Skip:(-not $IsMacOS) {
+            $result = @(Get-PackageManager -AllSupported)
+
+            $result | Should -Be @('brew', 'brew:macos')
+        }
+
+        It 'returns no package managers for unsupported platforms' -Skip:($IsWindows -or $IsLinux -or $IsMacOS) {
+            $result = @(Get-PackageManager -AllSupported)
+
+            $result | Should -BeEmpty
+        }
     }
 
     Context 'Install-PackageManager' {
