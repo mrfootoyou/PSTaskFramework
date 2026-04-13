@@ -94,13 +94,13 @@ Describe 'build-helpers.ps1' {
         }
 
         It 'returns true for root uid on non-Windows' -Skip:$IsWindows {
-            Mock -CommandName 'id' -ParameterFilter { $u -eq '-u' } -MockWith { '0' }
+            Mock -CommandName 'getUserId' -MockWith { '0' }
 
             Test-Administrator | Should -BeTrue
         }
 
         It 'returns false for non-root uid on non-Windows' -Skip:$IsWindows {
-            Mock -CommandName 'id' -ParameterFilter { $u -eq '-u' } -MockWith { '1000' }
+            Mock -CommandName 'getUserId' -MockWith { '1000' }
 
             Test-Administrator | Should -BeFalse
         }

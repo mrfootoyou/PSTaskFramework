@@ -11,6 +11,11 @@ Import-Module "$PSScriptRoot/psargs.psm1" -Verbose:$false
 
 $RepoRoot ??= Split-Path $PSScriptRoot -Parent
 
+# Mockable functions for testing purposes. These are not intended to be used directly.
+function getUserId {
+    id -u
+}
+
 function Test-Administrator {
     if ($IsWindows) {
         # test for administrator on Windows
@@ -18,7 +23,7 @@ function Test-Administrator {
     }
     else {
         # test for root user on Linux/macOS
-        return (id -u) -eq 0
+        return (getUserId) -eq 0
     }
 }
 

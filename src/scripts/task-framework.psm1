@@ -16,7 +16,7 @@ class TaskDefinition {
 
     [string] ToString() { return $this.Name }
 
-    static hidden [System.Collections.Generic.OrderedDictionary[string, TaskDefinition]] $AllTasks = [System.Collections.Generic.OrderedDictionary[string, TaskDefinition]]::new([StringComparer]::OrdinalIgnoreCase)
+    static hidden [ordered] $AllTasks = [ordered]@{}
     static hidden [bool] $TasksSorted = $true
 
     static [void] Clear() {
@@ -25,7 +25,7 @@ class TaskDefinition {
     }
 
     static [void] AddTask([TaskDefinition]$task) {
-        if ([TaskDefinition]::AllTasks.ContainsKey($task.Name)) {
+        if ([TaskDefinition]::AllTasks.Contains($task.Name)) {
             throw "A task with the name '$($task.Name)' already exists."
         }
         [TaskDefinition]::AllTasks[$task.Name] = $task
@@ -72,7 +72,7 @@ class TaskDefinition {
 
     # Returns an ordered dictionary of all defined tasks, sorted in dependency order.
     # The keys are task names and the values are TaskDefinition objects.
-    static [System.Collections.Generic.OrderedDictionary[string, TaskDefinition]] GetOrderedTasks() {
+    static [System.Collections.Specialized.IOrderedDictionary] GetOrderedTasks() {
         if ([TaskDefinition]::TasksSorted) {
             return [TaskDefinition]::AllTasks
         }

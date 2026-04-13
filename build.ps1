@@ -140,7 +140,7 @@ Task test -desc 'Execute tests' -dependsOn version {
         Run all Pester tests in the repo.
     .EXAMPLE
         PS> ./build.ps1 test -TestReport -CoverageReport
-        Run all Pester tests in the repo and generate a NUnit XML report and a
+        Run all Pester tests in the repo and generate a JUnit XML report and a
         Cobertura code coverage report.
     #>
     param(
@@ -148,7 +148,7 @@ Task test -desc 'Execute tests' -dependsOn version {
         # used to match test names.
         [string[]] $TestFilter,
         # Indicates that a test report should be written to
-        # "./artifacts/results/nunit.xml" in NUnit XML format.
+        # "./artifacts/results/junit.xml" in JUnit XML format.
         [switch] $TestReport,
         # Indicates that a code coverage report should be written to
         # "./artifacts/results/coverage.cobertura.xml" in Cobertura XML format.
@@ -160,7 +160,7 @@ Task test -desc 'Execute tests' -dependsOn version {
         [switch] $Verbose
     )
 
-    $ReportPath = './artifacts/results/nunit.xml'
+    $ReportPath = './artifacts/results/junit.xml'
     $CoverageOutputPath = './artifacts/results/coverage.cobertura.xml'
 
     if (!(Import-Module 'Pester' -MinimumVersion $PSModuleVersions['Pester'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
@@ -185,7 +185,7 @@ Task test -desc 'Execute tests' -dependsOn version {
         $configuration.TestResult = @{}
         $configuration.TestResult.Enabled = $true
         $configuration.TestResult.OutputPath = $ReportPath
-        $configuration.TestResult.OutputFormat = 'NUnitXml'
+        $configuration.TestResult.OutputFormat = 'JUnitXml'
         $configuration.TestResult.TestSuiteName = 'PowerShell Tests'
     }
     if ($CoverageReport) {
