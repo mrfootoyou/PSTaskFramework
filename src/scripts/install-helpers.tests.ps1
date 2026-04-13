@@ -96,6 +96,28 @@ Describe 'install-helpers.psm1' {
         }
     }
 
+    Context 'Get-WellKnownAppInfo' {
+        It 'returns app metadata for an exact app name' {
+            $result = Get-WellKnownAppInfo -Name 'git'
+
+            $result.Name | Should -BeExactly 'git'
+            $result.Info | Should -BeOfType ([System.Collections.IDictionary])
+            $result.Info['winget'] | Should -BeExactly 'Git.Git'
+        }
+
+        It 'supports wildcard app name lookup' {
+            $result = @(Get-WellKnownAppInfo -Name 'dotnet*')
+
+            $result.Count | Should -Be 1
+            $result[0].Name | Should -BeExactly 'dotnet-sdk-10'
+        }
+
+        It 'throws for unknown app names with ErrorAction Stop' {
+            { Get-WellKnownAppInfo -Name 'not-a-real-app' -ErrorAction Stop } |
+            Should -Throw "*not-a-real-app*not a well-known app*"
+        }
+    }
+
     Context 'Install-PackageManager' {
         It 'installs explicit package manager and returns its name' {
             Mock -CommandName installWinget -ModuleName install-helpers -MockWith { }

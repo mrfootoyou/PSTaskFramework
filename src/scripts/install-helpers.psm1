@@ -87,6 +87,50 @@ function isPowerShellUpToDate {
     return $appInfo.LatestVersion -and $PSVersionTable.PSVersion -ge $appInfo.LatestVersion
 }
 
+function Get-WellKnownAppInfo {
+    <#
+    .DESCRIPTION
+        Gets the metadata dictionary for a well-known app by name.
+    .OUTPUTS
+        [PSObject] with properties:
+        - Name: the app name that was looked up
+        - Info: the metadata dictionary for the app
+    #>
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([PSObject])]
+    param(
+        # The name of the well-known app to get info for. Wildcards supported.
+        # Defaults to '*'.
+        [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [SupportsWildcards()]
+        [string[]] $Name = @('*')
+    )
+    process {
+        switch ($Name) {
+            { $_.IndexOfAny([char[]]'*?[') -ge 0 } {
+                $n = $_
+                $WellKnownApps.GetEnumerator() |
+                Where-Object { $_.Key -like $n } |
+                ForEach-Object {
+                    [PSCustomObject]@{
+                        Name = $_.Key
+                        Info = $_.Value
+                    }
+                }
+            }
+            { $WellKnownApps.Contains($_) } {
+                [PSCustomObject]@{
+                    Name = $_
+                    Info = $WellKnownApps[$_]
+                }
+            }
+            default {
+                Write-Error -Exception "App '$_' is not a well-known app." -CategoryActivity 'Get-WellKnownAppInfo'
+            }
+        }
+    }
+}
+
 function refreshEnvironment {
     # only supported on Windows
     if (!$IsWindows) {
