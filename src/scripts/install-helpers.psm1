@@ -9,6 +9,11 @@ Import-Module "$PSScriptRoot/psargs.psm1" -Scope Global -Verbose:$false
 Import-Module "$PSScriptRoot/secrets.psm1" -Scope Global -Verbose:$false
 . "$PSScriptRoot/build-helpers.ps1"
 
+# Canonical install metadata for common tools.
+#
+# Keys are app names; values are dictionaries that may include:
+# - discovery fields (`executable`, `version`, `isUpToDate`, `website`)
+# - one or more install methods (`winget`, `choco`, `apt`, `dnf`, `brew`, `script:*`)
 $WellKnownApps = [ordered]@{
     'powershell'    = [ordered]@{
         executable = 'pwsh'
@@ -57,6 +62,9 @@ $WellKnownApps = [ordered]@{
 
 function isPowerShellUpToDate {
     param($appName, $appInfo)
+    $null = $appName
+
+    # Cache latest release checks to avoid frequent network calls during repeated tasks.
     if (!$appInfo.LatestVersion -or [DateTime]::Now -ge $appInfo.NextVersionCheck) {
         # get latest version from GitHub by inspecting the redirect from the "latest" release URL
         $resp = Invoke-WebRequest 'https://github.com/PowerShell/PowerShell/releases/latest' -MaximumRedirection 0 -SkipHttpErrorCheck -ErrorAction SilentlyContinue -ErrorVariable err -Verbose:$false
@@ -250,6 +258,8 @@ function installWithPackageManager {
     )
     $ErrorActionPreference = 'Stop'
 
+    # String values are collected and installed in one batch call. Array and script
+    # values are executed per-app to support custom command lines and logic.
     $packageIds = @()
     foreach ($app in $AppsToInstall) {
         $appName = $app.Name
@@ -305,6 +315,7 @@ function installWithWinget {
             0x8A15002B # No applicable update found
         )
         Invoke-Shell -AllowedExitCodes $allowedExitCodes -- winget @wingetArgs
+        # Normalize to success so callers treat "no update" as non-fatal.
         $global:LASTEXITCODE = 0
     }
 
@@ -398,6 +409,7 @@ function installWithAPT {
 
         if (!$aptUpdated) {
             Invoke-Shell -- sudo apt-get update -y
+            # Scriptblock closures in PowerShell require explicit variable mutation.
             (Get-Variable -Name aptUpdated).Value = $true
         }
 
@@ -456,6 +468,7 @@ function installWithBrew {
 
         if (!$brewUpdated) {
             Invoke-Shell -- brew update
+            # Scriptblock closures in PowerShell require explicit variable mutation.
             (Get-Variable -Name brewUpdated).Value = $true
         }
 
@@ -608,6 +621,7 @@ function Install-PackageManager {
             install $pm
         }
         catch {
+            # Keep trying remaining candidates; this cmdlet reports partial failures.
             Write-Error -ErrorRecord $_ -CategoryActivity 'Install-PackageManager'
         }
     }
@@ -798,6 +812,8 @@ function Install-RequiredApp {
     $installMethodToApps = @{}
     $allResolved = $false
     while (!$allResolved) {
+        # Re-resolve from scratch each iteration so failed package managers can be
+        # removed and alternate methods selected deterministically.
         $installMethodToApps.Clear()
         $unresolvedApps = @()
 
@@ -841,6 +857,7 @@ function Install-RequiredApp {
         foreach ($pm in $missingPMs) {
             if (!(Install-PackageManager -PackageManager $pm -ea Continue)) {
                 Write-Host 'Attempting alternative installation method...' -ForegroundColor Yellow
+                # Drop only the failing method, then restart resolution loop.
                 $installationMethods = $installationMethods.where{ $_ -ne $pm }
                 $allResolved = $false
                 break
@@ -906,6 +923,7 @@ function Install-PowerShellModule {
             Write-Information "$($PSStyle.Foreground.Yellow)Installing $Name $MinimumVersion (or greater) in $Scope scope...$($PSStyle.Reset)"
             Install-Module @PSBoundParameters -Force
 
+            # Re-query after install to verify the expected minimum version is visible.
             if (!($installed = tryGetModule @PSBoundParameters)) {
                 throw "Failed to install $Name $MinimumVersion (or greater) in $Scope scope."
             }
