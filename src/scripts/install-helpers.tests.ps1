@@ -40,8 +40,8 @@ Describe 'install-helpers.psm1' {
 
             $expected = @(
                 if ($IsWindows) { 'winget'; 'choco' }
-                if ($IsLinux) { 'apt'; 'dnf'; 'brew' }
-                if ($IsMacOS) { 'brew' }
+                if ($IsLinux) { 'apt'; 'dnf'; 'brew', 'brew:linux' }
+                if ($IsMacOS) { 'brew', 'brew:macos' }
             )
 
             $result | Should -Be $expected

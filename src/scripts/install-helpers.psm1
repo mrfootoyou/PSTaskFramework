@@ -550,12 +550,13 @@ function Get-PackageManager {
 
     $supportedPackageManagers = [string[]] @(
         if ($IsWindows) { 'winget', 'choco' }
-        if ($IsLinux) { 'apt', 'dnf', 'brew' }
-        if ($IsMacOS) { 'brew' }
+        if ($IsLinux) { 'apt', 'dnf', 'brew', 'brew:linux' }
+        if ($IsMacOS) { 'brew', 'brew:macos' }
     )
 
     if ($AllSupported) {
         Write-Output $supportedPackageManagers
+        return
     }
 
     foreach ($pm in $supportedPackageManagers) {
