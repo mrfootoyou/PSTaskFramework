@@ -986,7 +986,6 @@ function Install-PowerShellModule {
     }
 }
 
-# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
 $exportModuleMemberParams = @{
     Function = @(
         'Install-PowerShellModule'

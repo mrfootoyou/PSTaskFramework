@@ -22,6 +22,13 @@ else {
         regex  = $null
     }
     $script:secrets = $global:__PSTaskFramework_Secrets
+
+    if ($ExecutionContext.SessionState.Module) {
+        $ExecutionContext.SessionState.Module.OnRemove = {
+            Get-Variable -Scope Global -Name __PSTaskFramework_Secrets -ErrorAction Ignore |
+            Remove-Variable -Scope Global -Force -ErrorAction Ignore
+        }
+    }
 }
 
 # Mockable functions for testing purposes. These are not for external use.
@@ -31,6 +38,18 @@ function getState {
 
 function isContinuousIntegration {
     return $env:CI -in @('1', 'true')
+}
+
+function Clear-SecretStore {
+    <#
+    .DESCRIPTION
+        Clears all secrets from the secret store.
+    #>
+    [CmdletBinding()]
+    param()
+    $secrets = getState
+    $secrets.values.Clear()
+    $secrets.regex = $null
 }
 
 function Push-Secret {
@@ -154,13 +173,13 @@ function Read-Secret {
     return $value
 }
 
-# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
 $exportModuleMemberParams = @{
     Function = @(
         'Read-Secret'
         'Push-Secret'
         'Pop-Secret'
         'Protect-Secret'
+        'Clear-SecretStore'
     )
 }
 

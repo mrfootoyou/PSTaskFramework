@@ -189,4 +189,18 @@ Describe 'PSTaskFramework.Secrets Module' {
             $result | Should -BeExactly ''
         }
     }
+
+    Context 'Clear-SecretStore' {
+        It 'clears all secrets from the store' {
+            Push-Secret 'secret1'
+            Push-Secret 'secret2'
+            Push-Secret 'secret1'
+            $null = Protect-Secret -Message 'secret1 and secret2 are here'
+
+            Clear-SecretStore
+
+            $state.secrets.values.Count | Should -Be 0
+            $state.secrets.regex | Should -BeNull
+        }
+    }
 }
