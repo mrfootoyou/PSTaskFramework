@@ -8,7 +8,7 @@ param()
 
 Describe 'PSTaskFramework Module' {
     BeforeAll {
-        Import-Module "$PSScriptRoot/PSTaskFramework"
+        Import-Module "$PSScriptRoot/PSTaskFramework" -Scope Local -Verbose:$false
         Reset-TaskFramework
     }
 

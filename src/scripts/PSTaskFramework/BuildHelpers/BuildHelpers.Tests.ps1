@@ -7,7 +7,7 @@ param()
 
 Describe 'PSTaskFramework.BuildHelpers Module' {
     BeforeAll {
-        Import-Module "$PSScriptRoot/BuildHelpers" -Verbose:$false
+        Import-Module "$PSScriptRoot/BuildHelpers" -Scope Local -Verbose:$false
     }
 
     Context 'Assert-AppExists' {
