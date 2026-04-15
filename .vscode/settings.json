@@ -32,5 +32,13 @@
   },
   "powershell.scriptAnalysis.enable": true,
   "powershell.scriptAnalysis.settingsPath": "./PSScriptAnalyzerSettings.psd1",
-  "powershell.codeFormatting.preset": "Stroustrup"
+  "powershell.codeFormatting.preset": "Stroustrup",
+  "powershell.pester.codeLens": true,
+  "powershell.pester.useLegacyCodeLens": false,
+  "powershell.pester.outputVerbosity": "Detailed",
+  "code-runner.executorMap": {
+    // "powershell": "powershell -ExecutionPolicy ByPass -File",
+    "powershell": "pwsh -ExecutionPolicy ByPass -nop -noni -File"
+  },
+  "code-runner.runInTerminal": true
 }

@@ -19,8 +19,8 @@
     PS> .\build.ps1 list
     Lists all available tasks.
 .EXAMPLE
-    PS> .\build.ps1 test
-    Executes the 'test' task.
+    PS> .\build.ps1 test -noDeps
+    Executes the 'test' task without executing its dependencies.
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
 [CmdletBinding(PositionalBinding = $false)]
@@ -99,7 +99,8 @@ $ImportScripts = @(
 ####################################################################################
 # Define all tasks
 ####################################################################################
-Import-Module "$ScriptsDir/PSTaskFramework" -Force -Scope Local -Verbose:$false
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+Reset-TaskFramework
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -108,16 +109,17 @@ Task list -desc 'List all tasks' {
 Task bootstrap -desc 'Installs required tools' {
     <#
     .DESCRIPTION
-        Installs required tools for development, such as PowerShell modules.
+        Bootstraps the repository by installing required tools.
 
-        This task should be run at least once before running any other tasks to ensure
-        that all required tools are installed.
-
-        The specific tools that are installed may change over time as the repository
-        evolves, but currently this includes the Pester and PSScriptAnalyzer modules.
+        Required tools include:
+        - Git (probably already installed, but we'll update if necessary).
+        - PowerShell 7.4 or later (assumed to be already be installed).
+        - Pester
+        - PSScriptAnalyzer
+        - ConvertToSARIF
     #>
     param()
-    Import-Module InstallHelpers -Force -Verbose:$false
+    Import-Module InstallHelpers -Verbose:$false
 
     $appsToInstall = [ordered]@{
         'git'        = $null # well-known app
@@ -196,7 +198,7 @@ Task test -desc 'Execute tests' -dependsOn version {
     $ReportPath = './artifacts/results/junit.xml'
     $CoverageOutputPath = './artifacts/results/coverage.cobertura.xml'
 
-    if (!(Import-Module 'Pester' -MinimumVersion $PSModuleVersions['Pester'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
+    if (!(Import-Module Pester -MinimumVersion $PSModuleVersions['Pester'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
         throw 'Pester module is not installed. Run the "bootstrap" task to install required tools.'
     }
 
@@ -241,11 +243,6 @@ Task test -desc 'Execute tests' -dependsOn version {
     Write-Host "$($PSStyle.Dim)>> Invoke-Pester -Configuration $(ConvertTo-PSString $configuration)"
     & $tempModule Invoke-Pester -Configuration $configuration
 
-    # Reload nested modules since Pester may have unloaded them...
-    Import-Module PSArgs -Scope Global -Verbose:$false
-    Import-Module Secrets -Scope Global -Verbose:$false
-    Import-Module BuildHelpers -Scope Global -Verbose:$false
-
     if ($TestReport -and (Test-Path $ReportPath)) {
         Write-Host "Test report: '$ReportPath'." -ForegroundColor Green
     }
@@ -286,7 +283,7 @@ Task analysis -desc 'Execute analysis' -dependsOn version {
     )
     $SarifPath = './artifacts/results/analysis.sarif'
 
-    if (!(Import-Module 'PSScriptAnalyzer' -MinimumVersion $PSModuleVersions['PSScriptAnalyzer'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
+    if (!(Import-Module PSScriptAnalyzer -MinimumVersion $PSModuleVersions['PSScriptAnalyzer'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
         throw 'PSScriptAnalyzer module is not installed. Run the "bootstrap" task to install required tools.'
     }
     if (!(Get-Command 'Invoke-ScriptAnalyzer' -ea Ignore)) {
@@ -297,7 +294,7 @@ Task analysis -desc 'Execute analysis' -dependsOn version {
     }
 
     if ($CreateSarifReport) {
-        if (!(Import-Module 'ConvertToSARIF' -MinimumVersion $PSModuleVersions['ConvertToSARIF'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
+        if (!(Import-Module ConvertToSARIF -MinimumVersion $PSModuleVersions['ConvertToSARIF'] -PassThru -Verbose:$false -ErrorAction Ignore)) {
             throw 'ConvertToSARIF module is not installed. Run the "bootstrap" task to install required tools.'
         }
     }
@@ -346,4 +343,5 @@ Invoke-TaskFramework `
     -Variables $Variables `
     -ImportScripts $ImportScripts `
     -ExitOnError `
+    -InformationAction Continue `
     -Verbose:($VerbosePreference -eq 'Continue')

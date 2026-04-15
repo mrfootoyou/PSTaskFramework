@@ -99,7 +99,8 @@ $ImportScripts = @(
 ####################################################################################
 # Define all tasks
 ####################################################################################
-Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+Reset-TaskFramework
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -116,7 +117,7 @@ Task bootstrap -desc 'Installs required tools' {
         - ...
     #>
     param()
-    Import-Module "$ScriptsDir/install-helpers.psm1" -Verbose:$false
+    Import-Module InstallHelpers -Verbose:$false
 
     $appsToInstall = [ordered]@{
         'git'        = $null # well-known app
@@ -179,4 +180,5 @@ Invoke-TaskFramework `
     -Variables $Variables `
     -ImportScripts $ImportScripts `
     -ExitOnError `
+    -InformationAction Continue `
     -Verbose:($VerbosePreference -eq 'Continue')

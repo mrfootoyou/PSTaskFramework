@@ -6,16 +6,9 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 param()
 
-Set-StrictMode -Version Latest
-
 Describe 'PSTaskFramework.PSArgs Module' {
     BeforeAll {
-        $modulePath = Join-Path $PSScriptRoot 'PSArgs.psm1'
-        Import-Module $modulePath -Force
-    }
-
-    AfterAll {
-        Remove-Module -Name PSArgs -ErrorAction Ignore
+        Import-Module "$PSScriptRoot/PSArgs" -Verbose:$false
     }
 
     Context 'ConvertTo-PSString' {

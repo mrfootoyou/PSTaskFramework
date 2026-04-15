@@ -6,24 +6,14 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 param()
 
-Set-StrictMode -Version Latest
-
 Describe 'PSTaskFramework Module' {
     BeforeAll {
-        $modulePath = Join-Path $PSScriptRoot 'PSTaskFramework.psm1'
-        Import-Module $modulePath -Force
-
-        Mock -CommandName 'Write-Host' -MockWith { } -ModuleName 'PSTaskFramework' -Verbose:$false
-    }
-
-    BeforeEach {
+        Import-Module "$PSScriptRoot/PSTaskFramework" -Scope Local -Verbose:$false
         Reset-TaskFramework
-        $global:LASTEXITCODE = 0
-        $Error.Clear()
     }
 
-    AfterAll {
-        Remove-Module -Name PSTaskFramework -ErrorAction Ignore
+    AfterEach {
+        Reset-TaskFramework
     }
 
     It 'fails when no tasks are specified' {

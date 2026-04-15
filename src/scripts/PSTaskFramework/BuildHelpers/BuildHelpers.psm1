@@ -6,8 +6,8 @@
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingPositionalParameters', 'Invoke-Shell', Justification = 'Invoke-Shell is intended to be used with positional parameters.')]
 param()
 
-Import-Module "$PSScriptRoot/../Secrets" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/../PSArgs" -Scope Global -Verbose:$false
+Import-Module "$PSScriptRoot/../Secrets" -Verbose:$false
+Import-Module "$PSScriptRoot/../PSArgs" -Verbose:$false
 
 # Mockable functions for testing purposes. These are not intended to be used directly.
 function getUserId {
@@ -83,7 +83,7 @@ function Invoke-Shell {
         Invokes a shell application.
     .DESCRIPTION
         Invokes a shell application with arguments. The full command is echoed
-        to the console, unless the -NoEcho switch is specified.
+        to the console using Write-Information (suppress with `-InformationAction Ignore`).
 
         If the command completes with a non-zero exit code, it is considered to have
         failed and an error stating as much is reported/thrown according to the
@@ -116,15 +116,13 @@ function Invoke-Shell {
         [Parameter(ValueFromRemainingArguments)]
         [string[]] $CommandArgs,
 
-        # When specified, the full command will NOT be echoed to the console before execution.
-        [switch] $NoEcho,
-
+        # An array of exit codes that are considered successful. Defaults to 0.
         [int[]] $AllowedExitCodes = @(0)
     )
 
     $cmdPath = Assert-AppExists $Command -PassThru
     $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArg $CommandArgs)"
-    if (!$NoEcho) { Write-Host "$($PSStyle.Dim)>> $cmdText" }
+    Write-Information "$($PSStyle.Dim)>> $cmdText$($PSStyle.Reset)"
 
     $global:LASTEXITCODE = 0
     $PSNativeCommandUseErrorActionPreference = $false # we'll handle errors ourselves
@@ -138,7 +136,6 @@ function Invoke-Shell {
     }
 }
 
-# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
 $exportModuleMemberParams = @{
     Function = @(
         'Test-Administrator'
