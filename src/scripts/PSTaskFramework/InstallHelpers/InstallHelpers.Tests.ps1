@@ -787,7 +787,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
     }
 
     Context 'refreshEnvironment' {
-        It 'refreshes the PATH variable' {
+        It 'refreshes the PATH variable' -Skip:(-not $IsWindows) {
             inModuleScope 'InstallHelpers' {
                 $env:PATH += ";$TestDrive"
 
