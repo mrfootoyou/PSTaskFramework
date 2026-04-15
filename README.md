@@ -217,8 +217,7 @@ $ImportScripts = @(
 Notes:
 
 - `.ps1` script files will be dot-sourced just before task execution.
-- `.psm1`/`.psd1` module files will be imported using `Import-Module -Scope Local` just before task
-  execution.
+- `.psm1`/`.psd1` module files will be imported using `Import-Module` just before task execution.
 - Tasks can load `PSTaskFramework` child module using only the module's name. For example,
   `Import-Module InstallHelpers` will load the `$ScriptsDir/PSTaskFramework/InstallHelpers` module.
 - The following child modules are automatically imported into the global scope when the

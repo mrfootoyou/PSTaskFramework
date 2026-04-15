@@ -6,26 +6,64 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 param()
 
-Set-StrictMode -Version Latest
-
 Describe 'PSTaskFramework.Secrets Module' {
-    BeforeEach {
-        $modulePath = Join-Path $PSScriptRoot 'Secrets.psm1'
-        Import-Module $modulePath -Force
+    BeforeAll {
+        Import-Module "$PSScriptRoot\Secrets" -Verbose:$false
 
-        $script:previousCi = $env:CI
-        Remove-Item Env:\CI -ErrorAction Ignore
+        # Use a private secret store for testing to avoid interference with
+        # any global secrets.
+        $state = @{
+            secrets = [PSCustomObject]@{
+                values = @{}
+                regex  = $null
+            }
+            isCI    = $false
+        }
+        Mock getState -ModuleName Secrets { $state.secrets }
+
+        # Mock isContinuousIntegration to return false by default
+        Mock isContinuousIntegration -ModuleName Secrets { $state.isCI }
     }
 
     AfterEach {
-        if ($null -eq $script:previousCi) {
-            Remove-Item Env:\CI -ErrorAction Ignore
-        }
-        else {
-            $env:CI = $script:previousCi
+        # Reset state after each test to avoid cross-test contamination
+        $state.secrets.values.Clear()
+        $state.secrets.regex = $null
+        $state.isCI = $false
+    }
+
+    Context 'Push-Secret' {
+        It 'reference counts pushed secrets' {
+            Push-Secret 'top secret'
+            Push-Secret 'top secret'
+            Push-Secret 'top secret'
+
+            $state.secrets.values['top secret'] | Should -Be 3
         }
 
-        Remove-Module -Name Secrets -ErrorAction Ignore
+        It 'rejects empty secret values' {
+            { Push-Secret '' } | Should -Throw '*Cannot bind argument to parameter*'
+            { Push-Secret $null } | Should -Throw '*Cannot bind argument to parameter*'
+        }
+    }
+
+    Context 'Pop-Secret' {
+        It 'reference counts popped secrets' {
+            Push-Secret 'top secret'
+            Push-Secret 'top secret'
+            Pop-Secret 'top secret'
+
+            $state.secrets.values['top secret'] | Should -Be 1
+        }
+
+        It 'is okay when popping a secret that was never pushed' {
+            { Pop-Secret 'nonexistent-secret' } | Should -Not -Throw
+        }
+
+        It 'rejects empty secret values' {
+            { Pop-Secret '' } | Should -Throw '*Cannot bind argument to parameter*'
+            { Pop-Secret $null } | Should -Throw '*Cannot bind argument to parameter*'
+        }
     }
 
     Context 'Protect-Secret' {
@@ -33,6 +71,7 @@ Describe 'PSTaskFramework.Secrets Module' {
             $result = Protect-Secret -Message 'hello world'
 
             $result | Should -BeExactly 'hello world'
+            $state.secrets.regex | Should -BeNull
         }
 
         It 'masks registered secrets with the default mask' {
@@ -81,10 +120,6 @@ Describe 'PSTaskFramework.Secrets Module' {
             $unmasked | Should -BeExactly 'shared-secret'
         }
 
-        It 'rejects empty secret values' {
-            { Push-Secret '' } | Should -Throw '*Cannot bind argument to parameter*'
-        }
-
         It 'supports pushing and popping from the pipeline' {
             'pipelined-secret' | Push-Secret
             $masked = Protect-Secret -Message 'pipelined-secret'
@@ -98,43 +133,54 @@ Describe 'PSTaskFramework.Secrets Module' {
     }
 
     Context 'Read-Secret' {
-        It 'returns empty string and warns in CI when AllowEmpty is set' {
-            $env:CI = 'true'
-
-            $warnings = @()
-            $result = Read-Secret -Prompt 'Enter value' -AllowEmpty -WarningVariable warnings -WarningAction SilentlyContinue
-
-            $result | Should -BeExactly ''
-            ($warnings -join ' ') | Should -Match 'CI environment detected'
+        BeforeAll {
+            # Mock Read-Host to avoid hanging tests
+            Mock Read-Host -ModuleName Secrets {
+                throw "Read-Host called unexpectedly."
+            }
         }
 
-        It 'writes an error in CI when AllowEmpty is not set' {
-            $env:CI = 'true'
-
-            { Read-Secret -Prompt 'Enter value' -ErrorAction Stop } | Should -Throw '*Cannot read input in CI environment.*'
-        }
-
-        It 'returns plain text from secure input outside CI' {
-            Mock -CommandName Read-Host -ModuleName Secrets -MockWith {
+        It 'returns plain text from secure input' {
+            Mock Read-Host -ModuleName Secrets {
                 ConvertTo-SecureString 'my-secret' -AsPlainText -Force
             }
 
             $result = Read-Secret -Prompt 'Enter value'
 
             $result | Should -BeExactly 'my-secret'
-            Should -Invoke -CommandName Read-Host -ModuleName Secrets -Times 1 -Exactly
+            Should -Invoke -CommandName Read-Host -ModuleName Secrets `
+                -ParameterFilter { $Prompt -eq 'Enter value' -and $AsSecureString } `
+                -Times 1 -Exactly
         }
 
         It 'writes an error when no value is provided and AllowEmpty is not set' {
-            Mock -CommandName Read-Host -ModuleName Secrets -MockWith {
+            Mock Read-Host -ModuleName Secrets {
                 [System.Security.SecureString]::new()
             }
 
-            { Read-Secret -Prompt 'Enter value' -ErrorAction Stop } | Should -Throw '*No value provided.*'
+            { Read-Secret -Prompt 'Enter value' -ErrorAction Stop } | `
+                Should -Throw '*No value provided.*'
         }
 
-        It 'allows empty values when AllowEmpty is set outside CI' {
-            Mock -CommandName Read-Host -ModuleName Secrets -MockWith {
+        It 'returns empty string and warns in CI when AllowEmpty is set' {
+            $state.isCI = $true
+
+            $result = Read-Secret -Prompt 'Enter value' -AllowEmpty `
+                -WarningAction SilentlyContinue -WarningVariable warnings
+
+            $result | Should -BeExactly ''
+            ($warnings -join ' ') | Should -Match 'CI environment detected'
+        }
+
+        It 'writes an error in CI when AllowEmpty is not set' {
+            $state.isCI = $true
+
+            { Read-Secret -Prompt 'Enter value' -ErrorAction Stop } | `
+                Should -Throw '*Cannot read input in CI environment.*'
+        }
+
+        It 'allows empty values when AllowEmpty is set' {
+            Mock Read-Host -ModuleName Secrets {
                 [System.Security.SecureString]::new()
             }
 

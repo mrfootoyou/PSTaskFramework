@@ -5,10 +5,6 @@
 
 param()
 
-Import-Module "$PSScriptRoot/PSArgs" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/Secrets" -Scope Global -Verbose:$false
-Import-Module "$PSScriptRoot/BuildHelpers" -Scope Global -Verbose:$false
-
 class TaskDefinition {
     [string]$Name
     [string]$Description
@@ -292,19 +288,28 @@ function Invoke-Task {
         [string[]]$ImportScripts
     )
 
+    if ($null -eq $Task.Action) {
+        Write-Verbose "Skipping task '$($Task.Name)' since it has no action."
+        return
+    }
+
+    Import-Module PSArgs -Verbose:$false
+    Import-Module Secrets -Verbose:$false
+    Import-Module BuildHelpers -Verbose:$false
+
     $ImportScripts.foreach{
         Write-Verbose "Importing script '$_'."
         if ($_ -like '*.ps1') {
             . $_
         }
         else {
-            Import-Module $_ -Scope Local -Verbose:$false
+            Import-Module $_ -Verbose:$false
         }
     }
 
     $Variables.Keys.foreach{
         Write-Verbose "Importing variable '$_' with value $(ConvertTo-PSString $Variables[$_] -UseQuotes)."
-        Set-Variable -Name $_ -Value $Variables[$_] -Scope Local -Force -ea Ignore
+        Set-Variable -Name $_ -Value $Variables[$_] -Force -ea Ignore
     }
 
     $TaskName = $Task.Name
@@ -416,7 +421,6 @@ function Invoke-TaskFramework {
             $targs.Task = $task
             $targs.TaskArgs = $task.Name -eq $TaskName ? $TaskArgs : @()
             Invoke-Task @targs
-            Write-Host ''
         }
 
         Write-Verbose "Done executing tasks."
