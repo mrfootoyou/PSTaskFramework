@@ -122,7 +122,7 @@ function Invoke-Shell {
 
     $cmdPath = Assert-AppExists $Command -PassThru
     $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArg $CommandArgs)"
-    Write-Information "$($PSStyle.Dim)>> $cmdText"
+    Write-Information "$($PSStyle.Dim)>> $cmdText$($PSStyle.Reset)"
 
     $global:LASTEXITCODE = 0
     $PSNativeCommandUseErrorActionPreference = $false # we'll handle errors ourselves
