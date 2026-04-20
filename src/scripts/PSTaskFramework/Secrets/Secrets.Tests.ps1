@@ -8,7 +8,7 @@ param()
 
 Describe 'PSTaskFramework.Secrets Module' {
     BeforeAll {
-        Import-Module "$PSScriptRoot\Secrets" -Scope Local -ArgumentList Local -Verbose:$false
+        Import-Module "$PSScriptRoot/Secrets" -Scope Local -ArgumentList Local -Verbose:$false
 
         # Use a private secret store for testing to avoid interference with
         # any global secrets.

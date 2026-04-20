@@ -13,13 +13,13 @@
 
     PowerShell 7.4 or later is required to use this script. See https://aka.ms/install-powershell.
 .EXAMPLE
-    PS> .\build.ps1
+    PS> ./build.ps1
     Executes the default 'build' task, including all of its dependencies (e.g. 'restore').
 .EXAMPLE
-    PS> .\build.ps1 list
+    PS> ./build.ps1 list
     Lists all available tasks.
 .EXAMPLE
-    PS> .\build.ps1 test -noDeps
+    PS> ./build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
@@ -50,7 +50,7 @@ param (
     # Tip: Use `-- ` to clearly separate build-script arguments from task arguments.
     # Anything after the `-- ` will be passed verbatim to the invoked task.
     # For example:
-    #   .\build.ps1 myTask -v -- -v
+    #   ./build.ps1 myTask -v -- -v
     # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
     # while the second '-v' is passed to 'myTask' as a task-specific argument.
     [Parameter(ValueFromRemainingArguments)]
