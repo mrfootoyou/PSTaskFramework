@@ -218,10 +218,27 @@ function installBrew {
 
 function installWithPackageManager {
     param(
+        # A list of apps to install using the specified package manager. Each has the app name
+        # and the app metadata dictionary (Info) describing the PM installation details.
         [PSObject[]] $AppsToInstall,
+
+        # The name of the installation method to use, e.g. 'winget', 'choco', 'apt', 'dnf',
+        # 'brew', 'brew:linux', etc. This must correspond to a field in the app metadata
+        # dictionary that describes how to install the app using the specified package manager.
         [string] $MethodName,
+
+        # A user-friendly name for the package manager, used in logging messages.
         [string] $PackageManagerName,
+
+        # A scriptblock that executes a package manager command with the given arguments.
+        # Should support an optional switch parameter `-DoNotAppendArgs` to disable
+        # automatic "silent" argument appending, and an optional parameter
+        # `-AllowedExitCodes` to specify additional exit codes that should be treated as
+        # success.
         [scriptblock] $Execute,
+
+        # A scriptblock used to install a list of packages (the typical installation method
+        # for most package managers).
         [scriptblock] $InstallPackages
     )
     $ErrorActionPreference = 'Stop'
@@ -231,12 +248,13 @@ function installWithPackageManager {
     $packageIds = @()
     foreach ($app in $AppsToInstall) {
         $appName = $app.Name
-        $method = $app.Info[$MethodName]
+        $appInfo = $app.Info
+        $method = $appInfo[$MethodName]
 
         if ($method -is [string] -and $method) {
             $packageIds += $method
         }
-        elseif ($method -is [string[]] -and $method) {
+        elseif ($method -is [string[]] -or $method -is [System.Collections.IDictionary]) {
             Write-Verbose "Using $PackageManagerName with custom args to install '$appName'."
             & $Execute -- @method
         }
@@ -245,7 +263,7 @@ function installWithPackageManager {
             & {
                 $ErrorActionPreference = 'Stop'
                 $ProgressPreference = 'SilentlyContinue'
-                & $method $appName $app.Info $Execute
+                & $method $appName $appInfo $Execute
             }
         }
         else {
@@ -265,24 +283,32 @@ function installWithWinget {
     )
 
     $wingetExec = {
-        $wingetArgs = $args
-        if (!$wingetArgs.where{ $_ -in '-h', '--silent' }) {
-            $wingetArgs += '--silent'
-        }
-        if ($wingetArgs -notcontains '--force') {
-            $wingetArgs += '--force'
-        }
-        if ($wingetArgs -notcontains '--accept-package-agreements') {
-            $wingetArgs += '--accept-package-agreements'
-        }
-        if ($wingetArgs -notcontains '--accept-source-agreements') {
-            $wingetArgs += '--accept-source-agreements'
-        }
-        $allowedExitCodes = @(
-            0,
-            0x8A15002B # No applicable update found
+        [CmdletBinding(PositionalBinding)]
+        param(
+            [Parameter(Mandatory, Position = 0, ValueFromRemainingArguments = $true)]
+            [string[]] $PMArgs,
+            [switch]$DoNotAppendArgs,
+            [int[]]$AllowedExitCodes = @(
+                0,
+                0x8A15002B # No applicable update found
+            )
         )
-        Invoke-Shell -AllowedExitCodes $allowedExitCodes -- winget @wingetArgs
+        if (!$DoNotAppendArgs) {
+            if (!$PMArgs.where{ $_ -in '-h', '--silent' }) {
+                $PMArgs += '--silent'
+            }
+            if ($PMArgs -notcontains '--force') {
+                $PMArgs += '--force'
+            }
+            if ($PMArgs -notcontains '--accept-package-agreements') {
+                $PMArgs += '--accept-package-agreements'
+            }
+            if ($PMArgs -notcontains '--accept-source-agreements') {
+                $PMArgs += '--accept-source-agreements'
+            }
+        }
+
+        Invoke-Shell -AllowedExitCodes $allowedExitCodes -- winget @PMArgs
         # Normalize to success so callers treat "no update" as non-fatal.
         $global:LASTEXITCODE = 0
     }
@@ -304,18 +330,25 @@ function installWithChocolatey {
     )
 
     $chocoExec = {
-        $chocoArgs = $args
-        if (!$chocoArgs.where{ $_ -in '-y', '--yes', '--confirm' }) {
-            $chocoArgs += '--yes'
-        }
-        $allowedExitCodes = @(
-            0,
-            2 # nothing to do, no packages outdated
+        [CmdletBinding(PositionalBinding)]
+        param(
+            [Parameter(Mandatory, Position = 0, ValueFromRemainingArguments = $true)]
+            [string[]] $PMArgs,
+            [switch]$DoNotAppendArgs,
+            [int[]]$AllowedExitCodes = @(
+                0,
+                2 # nothing to do, no packages outdated
+            )
         )
+        if (!$DoNotAppendArgs) {
+            if (!$PMArgs.where{ $_ -in '-y', '--yes', '--confirm' }) {
+                $PMArgs += '--yes'
+            }
+        }
 
         # Chocolatey requires elevated permissions
         if (Test-Administrator) {
-            Invoke-Shell -AllowedExitCodes $allowedExitCodes -- choco @chocoArgs
+            Invoke-Shell -AllowedExitCodes $allowedExitCodes -- choco @PMArgs
             $global:LASTEXITCODE = 0
         }
         else {
@@ -323,7 +356,7 @@ function installWithChocolatey {
             # We must escape the arguments using Win32 command line parsing
             # rules. See https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments
             $cmdPath = Assert-AppExists 'choco' -PassThru
-            $cmdArgs = switch ($chocoArgs) {
+            $cmdArgs = switch ($PMArgs) {
                 { !$_ } { '""' }
                 { $_ -match '[ \t"]' } {
                     # 1. Escape literal backslashes immediately preceding a literal quote
@@ -370,9 +403,17 @@ function installWithAPT {
     $aptUpdated = $false
 
     $aptExec = {
-        $aptArgs = $args
-        if (!$aptArgs.where{ $_ -in '-y', '--yes', '--assume-yes' }) {
-            $aptArgs += '--yes'
+        [CmdletBinding(PositionalBinding)]
+        param(
+            [Parameter(Mandatory, Position = 0, ValueFromRemainingArguments = $true)]
+            [string[]] $PMArgs,
+            [switch]$DoNotAppendArgs,
+            [int[]]$AllowedExitCodes = @(0)
+        )
+        if (!$DoNotAppendArgs) {
+            if (!$PMArgs.where{ $_ -in '-y', '--yes', '--assume-yes' }) {
+                $PMArgs += '--yes'
+            }
         }
 
         if (!$aptUpdated) {
@@ -381,7 +422,7 @@ function installWithAPT {
             (Get-Variable -Name aptUpdated).Value = $true
         }
 
-        Invoke-Shell -- sudo apt-get @aptArgs
+        Invoke-Shell -AllowedExitCodes $AllowedExitCodes -- sudo apt-get @PMArgs
     }
 
     $pmArgs = @{
@@ -402,12 +443,20 @@ function installWithDNF {
     $ErrorActionPreference = 'Stop'
 
     $dnfExec = {
-        $dnfArgs = $args
-        if (!$dnfArgs.where{ $_ -in '-y', '--assumeyes' }) {
-            $dnfArgs += '-y'
+        [CmdletBinding(PositionalBinding)]
+        param(
+            [Parameter(Mandatory, Position = 0, ValueFromRemainingArguments = $true)]
+            [string[]] $PMArgs,
+            [switch]$DoNotAppendArgs,
+            [int[]]$AllowedExitCodes = @(0)
+        )
+        if (!$DoNotAppendArgs) {
+            if (!$PMArgs.where{ $_ -in '-y', '--assumeyes' }) {
+                $PMArgs += '-y'
+            }
         }
 
-        Invoke-Shell -- sudo dnf @dnfArgs
+        Invoke-Shell -AllowedExitCodes $AllowedExitCodes -- sudo dnf @PMArgs
     }
 
     $pmArgs = @{
@@ -429,9 +478,17 @@ function installWithBrew {
     $brewUpdated = $false
 
     $brewExec = {
-        $brewArgs = $args
-        if (!$brewArgs.where{ $_ -in '-q', '--quiet' }) {
-            $brewArgs += '--quiet'
+        [CmdletBinding(PositionalBinding)]
+        param(
+            [Parameter(Mandatory, Position = 0, ValueFromRemainingArguments = $true)]
+            [string[]] $PMArgs,
+            [switch]$DoNotAppendArgs,
+            [int[]]$AllowedExitCodes = @(0)
+        )
+        if (!$DoNotAppendArgs) {
+            if (!$PMArgs.where{ $_ -in '-q', '--quiet' }) {
+                $PMArgs += '--quiet'
+            }
         }
 
         if (!$brewUpdated) {
@@ -440,7 +497,7 @@ function installWithBrew {
             (Get-Variable -Name brewUpdated).Value = $true
         }
 
-        Invoke-Shell -- brew @brewArgs
+        Invoke-Shell -AllowedExitCodes $AllowedExitCodes -- brew @PMArgs
     }
 
     $brewInstallPackages = {
@@ -458,7 +515,7 @@ function installWithBrew {
                 $saved = $global:LASTEXITCODE
                 $null = Invoke-Shell -InformationAction Ignore -ErrorAction Ignore -- brew list $packageId 2>&1
                 if ($global:LASTEXITCODE -ne 0) {
-                    $global:LASTEXITCODE = $saved
+                    $global:LASTEXITCODE = $saved # real failure, keep the error code
                 }
             }
         }
@@ -486,13 +543,14 @@ function installWithScript {
 
     foreach ($app in $AppsToInstall) {
         $appName = $app.Name
-        $method = $app.Info[$MethodName]
+        $appInfo = $app.Info
+        $method = $appInfo[$MethodName]
         if ($method -is [scriptblock]) {
             Write-Verbose "Using $platform install script for '$appName'."
             & {
                 $ErrorActionPreference = 'Stop'
                 $ProgressPreference = 'SilentlyContinue'
-                & $method $appName $app.Info
+                & $method $appName $appInfo
             }
         }
         else {
@@ -624,50 +682,33 @@ function Install-RequiredApp {
         The -AppsToInstall parameter is a dictionary mapping application names to
         "installation information". The installation information describes various
         aspects of the app, including various installation methods, a command to test
-        if the app is already installed, a website for manual installation instructions,
-        and any other relevant data. The specific structure of the installation information
-        is flexible, but it must include at least one supported installation method (either
-        a package manager or a script block).
+        if the app is already installed, and any other relevant data. The specific structure
+        of the installation information is flexible, but it must include at least one
+        supported installation method (either a package manager or a script block).
 
         If an app's installation information is $null, it indicates that the app is in the
         $WellKnownApps collection and you want to use the default installation methods from
         there rather than specifying custom or duplicate installation information.
 
-        Example:
-          $AppsToInstall = @{
-            'git'   = $null # i.e., use install info from the well-known apps list
-            'myapp' = [ordered]@{
-                website        = 'https://example.com/myapp#how-to-install'
-                executable     = 'my-app'
-                isUpToDate     = { (my-app --version) -like '2.*' }
-                winget         = 'Company.MyApp' # exact package id
-                choco          = 'upgrade', 'myapp', '--params="/arg1 /arg2"' # custom chocolatey command
-                'script:linux' = { param($appName, $appInfo) Write-Host "Installing $appName with a script..." }
-                data           = @{ custom data for use in script }
-            }
-        }
-
         Installation Information:
         ------------------------
         The installation information for each app can include any of the following properties:
 
-        - website: A URL to the app's website or installation instructions, for informational
-          purposes.
-        - executable: The name or path of the installed executable. Defaults to the app name.
+        - `executable`: The name or path of the installed executable. Defaults to the app name.
           Used by the installation logic to test if the app is already installed. Use an empty
           string to indicate that no such executable is available (perhaps the app is not in the
           PATH or the path is unpredictable).
-        - isUpToDate: An optional script block to test if the app is "up-to-date", e.g., has the
-          required version, etc.. The script block should return $true if the app is up-to-date,
-          and $false otherwise. If not specified, it is assumed to _not_ be up-to-date.
+        - `isUpToDate`: An optional script block to test if the app is installed and up-to-date.
+          The script block should return $true if the app is up-to-date and $false otherwise.
+          If not specified, it is assumed to _not_ be up-to-date.
           This script block will only be called if the `executable` (see above) exists,
           or is an empty string.
+        - `version`: An optional scriptblock that returns the installed version when invoked.
         - One or more installation methods where the property name is the installation method
           and the property value describes the details for that installation method.
-          Supported installation methods are:
-          - Package manager name (winget, chocolatey, apt, dnf, brew, brew:linux, brew:macos).
-            See below for details on how to specify package manager-specific installation
-            information.
+          Supported installation methods:
+          - Package manager (winget, chocolatey, apt, dnf, brew, brew:linux, brew:macos).
+            See below for package manager installation details.
           - 'script:<platform>' where platform is 'windows', 'linux', or 'macos'. A script block
             that performs the installation for the specified platform. The script block will be
             passed two arguments: the app name and the app info dictionary.
@@ -681,9 +722,25 @@ function Install-RequiredApp {
 
         - A single string value representing the package manager-specific package/app id.
         - An array of strings specifying the package manager-specific arguments to use.
-        - A script block to perform the installation. The script block will be passed three
+          These will be passed to the package manager without modification. "Silent"
+          arguments will be automatically appended.
+        - A dictionary with the following properties:
+          - `PMArgs` - an array of strings specifying the package manager-specific arguments
+            to use (similar to the array of strings above).
+          - `DoNotAppendArgs` - a boolean value that can be set to prevent automatic
+            inclusion of "silent" arguments.
+          - `AllowedExitCodes` - an array of integers specifying which exit codes should be
+            treated as successful.
+        - A scriptblock to perform the installation. This scriptblock will be passed three
           arguments: the app name, the app info dictionary, and a script block used to
-          execute the package manager command.
+          invoke the package manager command. For example, a `winget` scriptblock will
+          receive a third argument ($invokeWinget) that can be used like
+          `& $invokeWinget -- ...` to run the equivalent `winget ...` command with the
+          benefits of error handling and silent installation. This scriptblock argument
+          accepts an optional `-AllowedExitCodes` parameter that can be used to specify
+          which exit codes should be treated as successful. You can also use the
+          `-DoNotAppendArgs` switch to prevent "silent" arguments from being automatically
+          added to the package manager command.
 
         For apps with multiple package managers defined on systems with multiple package
         managers available, the specific package manager used to install the app is based
@@ -699,23 +756,38 @@ function Install-RequiredApp {
         $apps = @{
             'git' = $null  # will use install info from the well-known apps list
             'myapp' = [ordered]@{
-                website        = 'https://example.com/myapp#how-to-install'
                 executable     = 'my-app'
                 isUpToDate     = { (my-app --version) -like '2.*' }
-                winget         = 'Company.MyApp' # exact package id
-                choco          = 'upgrade', 'myapp', '--params="/arg1 /arg2"' # custom chocolatey command
-                'script:linux' = { param($appName, $appInfo) Write-Host "Installing $appName with a script..." }
-                data           = @{ custom data for use in script block(s) }
+                version        = { my-app --version }
+                winget         = 'Company.MyApp'
+                choco          = @('upgrade', 'myapp', '--params="/arg1 /arg2"')
+                dnf            = @{
+                                    PMArgs = @('install', 'myapp@2.0.0', '--not-quiet')
+                                    DoNotAppendArgs = $true
+                                    AllowedExitCodes = @(0, 1)
+                                 }
+                'script:linux' = {
+                        param($appName, $appInfo)
+                        # ...custom install script...
+                    }
+                'brew:macos'   = {
+                        param($appName, $appInfo, $invokeBrew)
+                        & $invokeBrew -AllowedExitCodes 0,1,2 -- install myapp ...
+                    }
+                data           = @{...} # custom data for use in scriptblock(s) via `$appInfo.data`.
             }
         }
         Install-RequiredApp -AppsToInstall $apps
 
-        This example attempts to install "git" and "myapp". For "git", it will look up the
-        installation information in the well-known apps list. For "myapp", it will use the
-        provided installation information: If winget is available, it will run `winget install
-        Company.MyApp --exact`. If chocolatey is available but winget is not, it will run
-        `choco --yes upgrade myapp --params="/arg1 /arg2"`. On linux, it will execute the
-        given script block, passing in the app name and the app info dictionary.
+        This example demonstrates the various installation methods. For "git", it will look
+        up the installation information in the well-known apps list. For "myapp", it will use
+        the provided installation information: If Winget is available, it will run `winget
+        install Company.MyApp --exact --source winget`. If Chocolatey is available but Winget
+        is not, it will run `choco upgrade myapp --params="/arg1 /arg2" --yes`. On Linux
+        systems, if DNF is available, it will run `dnf install myapp@2.0.0 --extra-args -y`.
+        If DNF is not available, it will execute the custom script block ("script:linux").
+        On macOS systems with Homebrew available, it will execute the custom Homebrew script
+        block. Otherwise it will fail since there is no supported installation method available.
     #>
     [CmdletBinding(PositionalBinding = $false)]
     param(
@@ -730,32 +802,34 @@ function Install-RequiredApp {
     # Validate that all apps have installation information, either provided
     # directly or via the well-known apps list...
     $copiedAppsToInstall = [ordered]@{}
-    foreach ($app in $AppsToInstall.Keys) {
-        $appInfo = $AppsToInstall[$app] ?? $WellKnownApps[$app]
+    foreach ($appName in $AppsToInstall.Keys) {
+        $appInfo = $AppsToInstall[$appName] ?? $WellKnownApps[$appName]
         if ($null -eq $appInfo) {
-            throw "No install information found for '$app'. Please provide installation details or ensure it's defined in the well-known apps list."
+            throw "No install information found for '$appName'. Please provide installation details or ensure it's defined in the well-known apps list."
         }
         if ($appInfo -isnot [System.Collections.IDictionary]) {
-            throw "Invalid install information for '$app'. Expected a dictionary."
+            throw "Invalid install information for '$appName'. Expected a dictionary."
         }
 
         # check if the app needs to be installed...
-        $executable = $appInfo['executable'] ?? $app
-        if ($executable -isnot [string]) { throw "Invalid 'executable' value for '$app'. Expected a string." }
+        $executable = $appInfo['executable'] ?? $appName
+        if ($executable -isnot [string]) { throw "Invalid 'executable' value for '$appName'. Expected a string." }
 
         $appExists = $executable -and (Get-Command $executable -CommandType Application -ErrorAction Ignore)
         $isUpToDateTest = $appInfo['isUpToDate'] ?? { $appExists }
-        if ($isUpToDateTest -isnot [scriptblock]) { throw "Invalid 'isUpToDate' value for '$app'. Expected script block." }
+        if ($isUpToDateTest -isnot [scriptblock]) { throw "Invalid 'isUpToDate' value for '$appName'. Expected script block." }
 
         if ($executable -eq '' -or $appExists) {
-            if (& $isUpToDateTest $app $appInfo) {
-                $version = $appInfo['version'] -is [scriptblock] ? (& $appInfo['version']) : $appInfo['version']
-                Write-Information "$($PSStyle.Foreground.Green)$app $version is installed.$($PSStyle.Reset)"
+            if (& $isUpToDateTest $appName $appInfo) {
+                $version = $appInfo['version'] -is [scriptblock] `
+                    ? (& $appInfo['version'] $appName $appInfo) `
+                    : $appInfo['version']
+                Write-Information "$($PSStyle.Foreground.Green)$appName $version is installed.$($PSStyle.Reset)"
                 continue
             }
         }
 
-        $copiedAppsToInstall[$app] = $appInfo
+        $copiedAppsToInstall[$appName] = $appInfo
     }
     $AppsToInstall = $copiedAppsToInstall
 
@@ -786,8 +860,8 @@ function Install-RequiredApp {
         $installMethodToApps.Clear()
         $unresolvedApps = @()
 
-        foreach ($app in $AppsToInstall.Keys) {
-            $appInfo = $AppsToInstall[$app]
+        foreach ($appName in $AppsToInstall.Keys) {
+            $appInfo = $AppsToInstall[$appName]
 
             # if the app info is an ordered dictionary, preserve that order when checking
             # for installation methods. Otherwise, use the $installationMethods order...
@@ -800,13 +874,13 @@ function Install-RequiredApp {
 
             if ($preferredMethod) {
                 $data = [PSCustomObject]@{
-                    Name = $app
+                    Name = $appName
                     Info = $appInfo
                 }
                 $installMethodToApps[$preferredMethod.ToLower()] += , $data
             }
             else {
-                $unresolvedApps += $app
+                $unresolvedApps += $appName
             }
         }
 
