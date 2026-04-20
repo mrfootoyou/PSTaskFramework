@@ -52,30 +52,33 @@ $WellKnownApps = [ordered]@{
 }
 
 function script:isPowerShellUpToDate {
+    # This function checks if the installed PowerShell version meets or exceeds the latest
+    # stable release available on GitHub. The version id is cached for 6 hours to minimize
+    # network calls, with error handling to retry sooner if the check fails.
     param($appName, $appInfo)
-    $null = $appName
+    $data = ($appInfo.data ??= @{})
 
     # Cache latest release checks to avoid frequent network calls during repeated tasks.
-    if (!$appInfo.LatestVersion -or [DateTime]::Now -ge $appInfo.NextVersionCheck) {
+    if (!$data.LatestVersion -or [DateTime]::Now -ge $data.NextVersionCheck) {
         # get latest version from GitHub by inspecting the redirect from the "latest" release URL
         $resp = Invoke-WebRequest 'https://github.com/PowerShell/PowerShell/releases/latest' -MaximumRedirection 0 -SkipHttpErrorCheck -ErrorAction SilentlyContinue -ErrorVariable err -Verbose:$false
         if ($resp -and $resp.StatusCode -eq 302) {
             # Location: https://github.com/PowerShell/PowerShell/releases/tag/v7.6.0
             $latestVer = ([uri]$resp.Headers['Location'][0]).Segments[-1].TrimStart('v')
-            $appInfo.LatestVersion = $latestVer
-            $appInfo.NextVersionCheck = [DateTime]::Now.AddHours(6) # check every 6 hours
+            $data.LatestVersion = $latestVer
+            $data.NextVersionCheck = [DateTime]::Now.AddHours(6) # check every 6 hours
         }
         else {
             if ($err) { Write-Warning "Unexpected error when checking latest PowerShell version: $err" }
             else { Write-Warning "Unexpected response when checking latest PowerShell version: Expected 302 but got $($resp.StatusCode) - $($resp.StatusDescription)" }
-            $appInfo.NextVersionCheck = [DateTime]::Now.AddMinutes(10) # try again in 10 minutes
+            $data.NextVersionCheck = [DateTime]::Now.AddMinutes(10) # try again in 10 minutes
             return $true
         }
     }
     else {
-        Write-Verbose "Using cached latest PowerShell version: $($appInfo.LatestVersion). Next check at $($appInfo.NextVersionCheck)."
+        Write-Verbose "Using cached latest PowerShell version: $($data.LatestVersion). Next check at $($data.NextVersionCheck)."
     }
-    return $appInfo.LatestVersion -and $PSVersionTable.PSVersion -ge $appInfo.LatestVersion
+    return $data.LatestVersion -and $PSVersionTable.PSVersion -ge $data.LatestVersion
 }
 
 function script:installPowerShell {
@@ -84,7 +87,7 @@ function script:installPowerShell {
     # and varies by platform.
     param($appName, $appInfo)
 
-    Write-Host "Install PowerShell $($appInfo.LatestVersion) from $($appInfo.website)." -ForegroundColor Magenta
+    Write-Host "Install PowerShell $($appInfo.data.LatestVersion) from $($appInfo.website)." -ForegroundColor Magenta
 }
 
 function script:installDockerLinux {

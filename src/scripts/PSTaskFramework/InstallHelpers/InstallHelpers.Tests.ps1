@@ -696,13 +696,17 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 }
 
                 $appInfo = [ordered]@{
+                    data = @{
+                        LatestVersion    = $latestVersion
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    }
                 }
 
                 isPowerShellUpToDate 'powershell' $appInfo | Should -BeTrue
 
                 Should -Invoke Invoke-WebRequest -Times 1 -Exactly
-                $appInfo.LatestVersion.ToString() | Should -BeExactly $latestVersion
-                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+                $appInfo.data.LatestVersion.ToString() | Should -BeExactly $latestVersion
+                $appInfo.data.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
             }
         }
         It 'uses cached latest version when NextVersionCheck is in the future' {
@@ -711,8 +715,10 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $latestVersion = $PSVersionTable.PSVersion.ToString()
                 $appInfo = [ordered]@{
-                    LatestVersion    = $latestVersion
-                    NextVersionCheck = [DateTime]::Now.AddMinutes(1) # future
+                    data = @{
+                        LatestVersion    = $latestVersion
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(1) # future
+                    }
                 }
 
                 isPowerShellUpToDate 'powershell' $appInfo | Should -BeTrue
@@ -731,15 +737,17 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 }
 
                 $appInfo = [ordered]@{
-                    LatestVersion    = '1.0.0'
-                    NextVersionCheck = [DateTime]::Now.AddMinutes(-1)
+                    data = @{
+                        LatestVersion    = '1.0.0'
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(-1)
+                    }
                 }
 
                 isPowerShellUpToDate 'powershell' $appInfo | Should -BeFalse
 
                 Should -Invoke Invoke-WebRequest -Times 1 -Exactly
-                $appInfo.LatestVersion | Should -BeExactly $latestVersion
-                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+                $appInfo.data.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.data.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
             }
         }
         It 'uses cached latest version when web request fails' {
@@ -751,8 +759,10 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $latestVersion = $PSVersionTable.PSVersion.ToString()
                 $appInfo = [ordered]@{
-                    LatestVersion    = $latestVersion
-                    NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    data = @{
+                        LatestVersion    = $latestVersion
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    }
                 }
 
                 $WarningPreference = 'Ignore'
@@ -760,8 +770,8 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $result | Should -BeTrue
                 Should -Invoke Invoke-WebRequest -Times 1 -Exactly
-                $appInfo.LatestVersion | Should -BeExactly $latestVersion
-                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+                $appInfo.data.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.data.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
             }
         }
         It 'uses cached latest version when web request does not return 302' {
@@ -772,16 +782,18 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $latestVersion = $PSVersionTable.PSVersion.ToString()
                 $appInfo = [ordered]@{
-                    LatestVersion    = $latestVersion
-                    NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    data = @{
+                        LatestVersion    = $latestVersion
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    }
                 }
 
                 $WarningPreference = 'Ignore'
                 (& isPowerShellUpToDate 'powershell' $appInfo) | Should -BeTrue
 
                 Should -Invoke Invoke-WebRequest -Times 1 -Exactly
-                $appInfo.LatestVersion | Should -BeExactly $latestVersion
-                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+                $appInfo.data.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.data.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
             }
         }
     }
