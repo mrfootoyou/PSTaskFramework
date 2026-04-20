@@ -368,7 +368,7 @@ function installWithWinget {
         MethodName         = $MethodName
         PackageManagerName = 'Winget'
         Execute            = $wingetExec
-        InstallPackages    = { & $wingetExec -- install --exact @args }
+        InstallPackages    = { & $wingetExec -- install @args --exact --source winget }
     }
     installWithPackageManager @pmArgs
 }

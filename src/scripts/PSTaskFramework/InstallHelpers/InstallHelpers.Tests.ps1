@@ -502,7 +502,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 Should -Invoke Invoke-Shell -Times 1 -Exactly
                 $global:LASTEXITCODE | Should -Be 0
                 $script:wingetCalls[0].Command | Should -BeExactly 'winget'
-                $script:wingetCalls[0].CommandArgs | Should -BeExactly @('install', '--exact', 'Git.Git', '--silent', '--force', '--accept-package-agreements', '--accept-source-agreements')
+                $script:wingetCalls[0].CommandArgs | Should -BeExactly @('install', 'Git.Git', '--exact', '--source', 'winget', '--silent', '--force', '--accept-package-agreements', '--accept-source-agreements')
             }
         }
 
