@@ -1,7 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore psargs,targs
+<#
+.DESCRIPTION
+    Task management helpers for PowerShell.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
+# spell:ignore psargs,targs
 
 param()
 

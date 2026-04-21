@@ -1,7 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore bstr
+<#
+.DESCRIPTION
+    Secret management helpers for PowerShell.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
+# spell:ignore bstr
 
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidGlobalVars', 'global:__PSTaskFramework_Secrets', Justification = 'Intended to be used this way.')]
 param(

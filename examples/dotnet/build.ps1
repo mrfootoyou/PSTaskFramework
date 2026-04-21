@@ -1,7 +1,3 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore winget,choco,opencover,reportgenerator,reportgenerator-globaltool
-#Requires -Version 7.4
 <#
 .SYNOPSIS
     A lightweight task runner for common .NET Core repository tasks.
@@ -21,7 +17,13 @@
 .EXAMPLE
     PS> ./build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
 #>
+#Requires -Version 7.4
+# spell:ignore winget,choco,opencover,reportgenerator,reportgenerator-globaltool
+
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
 [CmdletBinding(PositionalBinding = $false)]
 param (

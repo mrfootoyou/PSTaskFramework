@@ -1,7 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore psargs,winget,choco,8wekyb3d8bbwe,assumeyes,myapp
+<#
+.DESCRIPTION
+    Well-known applications metadata for installation helpers.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
+# spell:ignore psargs,winget,choco,8wekyb3d8bbwe,assumeyes,myapp
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'WellKnownApps')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'appName')]
