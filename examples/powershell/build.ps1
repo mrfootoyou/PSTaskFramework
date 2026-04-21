@@ -27,7 +27,6 @@
 #Requires -Version 7.4
 # spell:ignore pester,sarif,nunit
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
 [CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.

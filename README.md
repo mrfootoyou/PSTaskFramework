@@ -84,7 +84,7 @@ Tasks are the core unit of work in the framework. They are basically just named 
 can be invoked from the command line, similar to functions. And like functions they can accept
 parameters and arguments. Unlike functions, however, they can depend on other tasks.
 
-Tasks are registered with the `Task` command (an alias for the `Add-TaskFrameworkTask` cmdlet).
+Tasks are registered with the `Task` command.
 
 The following example defines a `build` task that depends on a `restore` task and accepts a
 `Version` parameter:
