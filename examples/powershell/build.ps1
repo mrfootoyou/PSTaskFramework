@@ -10,12 +10,15 @@
     PowerShell 7.4 or later is required to use this script. See https://aka.ms/install-powershell.
 .EXAMPLE
     PS> ./build.ps1
+
     Executes the default 'test' and 'analysis' tasks.
 .EXAMPLE
     PS> ./build.ps1 list
+
     Lists all available tasks.
 .EXAMPLE
     PS> ./build.ps1 test -noDeps
+
     Executes the 'test' task without executing its dependencies.
 .NOTES
     SPDX-License-Identifier: Unlicense
@@ -174,9 +177,11 @@ Task test -desc 'Execute tests' -dependsOn version {
         Executes all Pester tests in the repo and optionally collect code coverage.
     .EXAMPLE
         PS> ./build.ps1 test
+
         Run all Pester tests in the repo.
     .EXAMPLE
         PS> ./build.ps1 test -TestReport -CoverageReport
+
         Run all Pester tests in the repo and generate a JUnit XML report and a
         Cobertura code coverage report.
     #>
@@ -272,9 +277,11 @@ Task analysis -desc 'Execute analysis' -dependsOn version {
         The script will set the LASTEXITCODE to the number of issues found (0 or more).
     .EXAMPLE
         PS> ./build.ps1 analysis
+
         Run PSScriptAnalyzer on the repo.
     .EXAMPLE
         PS> ./build.ps1 analysis -CreateSarifReport
+
         Run PSScriptAnalyzer on the repo and generate a SARIF report.
     #>
     param(
