@@ -47,8 +47,8 @@ Describe 'PSTaskFramework.Secrets Module' {
         }
 
         It 'rejects empty secret values' {
-            { Push-Secret '' } | Should -Throw '*Cannot bind argument to parameter*'
-            { Push-Secret $null } | Should -Throw '*Cannot bind argument to parameter*'
+            { Push-Secret '' } | Should -Throw '*The argument is null or empty*'
+            { Push-Secret $null } | Should -Throw '*The argument is null or empty*'
         }
     }
 
@@ -62,12 +62,12 @@ Describe 'PSTaskFramework.Secrets Module' {
         }
 
         It 'is okay when popping a secret that was never pushed' {
-            { Pop-Secret 'nonexistent-secret' } | Should -Not -Throw
+            { Pop-Secret 'nonexistent-secret' -ea Stop } | Should -Throw '*Secret not found.*'
         }
 
         It 'rejects empty secret values' {
-            { Pop-Secret '' } | Should -Throw '*Cannot bind argument to parameter*'
-            { Pop-Secret $null } | Should -Throw '*Cannot bind argument to parameter*'
+            { Pop-Secret '' } | Should -Throw '*The argument is null or empty*'
+            { Pop-Secret $null } | Should -Throw '*The argument is null or empty*'
         }
     }
 

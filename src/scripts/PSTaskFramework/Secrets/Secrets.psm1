@@ -65,15 +65,16 @@ function Push-Secret {
         The secret is reference counted, thus every call to `Push-Secret X` must have
         a corresponding `Pop-Secret X`.
     #>
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSPossibleIncorrectUsageOfAssignmentOperator', '', Justification = 'Intended to be used this way.')]
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, ValueFromPipeline)]
+        [ValidateNotNullOrEmpty()]
         [string]$Value
     )
     process {
         $secrets = getState
-        if ($Value -AND ($secrets.values[$Value] += 1) -eq 1) {
+        $n = ($secrets.values[$Value] += 1)
+        if ($n -eq 1) {
             $secrets.regex = $null
         }
     }
@@ -84,15 +85,21 @@ function Pop-Secret {
     .DESCRIPTION
         Unregisters a secret value previously registered with Push-Secret.
     #>
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSPossibleIncorrectUsageOfAssignmentOperator', '', Justification = 'Intended to be used this way.')]
     [CmdletBinding()]
     param (
+        # The secret value to unregister. Must have been previously registered with Push-Secret.
         [Parameter(Mandatory, ValueFromPipeline)]
+        [ValidateNotNullOrEmpty()]
         [string]$Value
     )
     process {
         $secrets = getState
-        if ($Value -AND $secrets.values.ContainsKey($Value) -AND ($secrets.values[$Value] -= 1) -eq 0) {
+        if (!$secrets.values.ContainsKey($Value)) {
+            Write-Error -Exception 'Secret not found.' -CategoryActivity 'Pop-Secret'
+            return
+        }
+        $n = ($secrets.values[$Value] -= 1)
+        if ($n -eq 0) {
             $null = $secrets.values.Remove($Value)
             $secrets.regex = $null
         }
@@ -110,7 +117,6 @@ function Protect-Secret {
     #>
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedParameter', 'Mask', Justification = 'Not unused.')]
     param (
         [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
         [AllowEmptyString()]
@@ -129,6 +135,7 @@ function Protect-Secret {
         if ($secrets.regex) {
             # Use a match-evaluator overload to prevent '$0' from reintroducing the secret value
             $secrets.regex.Replace($Message, { $Mask })
+            $null = $Mask # Avoid incorrect "unused parameter" warning
         }
         else {
             $Message
