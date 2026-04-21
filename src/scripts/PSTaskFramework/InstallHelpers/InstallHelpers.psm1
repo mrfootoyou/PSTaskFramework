@@ -1,7 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore psargs,winget,choco,8wekyb3d8bbwe,assumeyes,myapp
+<#
+.DESCRIPTION
+    Installation helpers for various tools and applications.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
+# spell:ignore psargs,winget,choco,8wekyb3d8bbwe,assumeyes,myapp
 
 param()
 

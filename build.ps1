@@ -1,7 +1,3 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore pester,sarif,nunit
-#Requires -Version 7.4
 <#
 .SYNOPSIS
     A lightweight task runner for common PowerShell repository tasks.
@@ -21,7 +17,13 @@
 .EXAMPLE
     PS> ./build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
 #>
+#Requires -Version 7.4
+# spell:ignore pester,sarif,nunit,dont
+
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
 [CmdletBinding(PositionalBinding = $false)]
 param (
@@ -48,7 +50,7 @@ param (
     #   ./build.ps1 myTask -v -- -v
     # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
     # while the second '-v' is passed to 'myTask' as a task-specific argument.
-    [Parameter(ValueFromRemainingArguments)]
+    [Parameter(ValueFromRemainingArguments, DontShow)]
     [object[]] $TaskArgs,
 
     # When specified, dependencies of the task(s) will not be executed.
