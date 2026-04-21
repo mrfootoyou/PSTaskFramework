@@ -444,6 +444,65 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                             }
                         }
                     }
+                    [PSCustomObject]@{
+                        Name = 'pkg-d'
+                        Info = @{
+                            winget = [ordered]@{
+                                PMArgs           = 'install', 'Contoso.D'
+                                DoNotAppendArgs  = $true
+                                AllowedExitCodes = 0, 3010
+                            }
+                        }
+                    }
+                    [PSCustomObject]@{
+                        Name = 'pkg-a'
+                        Info = @{ winget = 'Contoso.E' }
+                    }
+                )
+
+                $execute = { $script:execCalls += , @($args) }
+                $installPackages = { $script:installCalls += , @($args) }
+
+                installWithPackageManager `
+                    -AppsToInstall $apps `
+                    -MethodName 'winget' `
+                    -PackageManagerName 'Winget' `
+                    -Execute $execute `
+                    -InstallPackages $installPackages
+
+                $apps | Should -HaveCount 5
+                $script:installCalls | Should -HaveCount 1
+                $script:installCalls[0] | Should -Be ('Contoso.A', 'Contoso.E')
+                $script:execCalls | Should -HaveCount 3
+                $script:execCalls[0] | Should -Be ('upgrade', 'Contoso.B')
+                $script:execCalls[1] | Should -Be ('install', 'Contoso.C')
+                $script:execCalls[2] | Should -Be @('-PMArgs:', @('install', 'Contoso.D'), '-DoNotAppendArgs:', $true, '-AllowedExitCodes:', @(0, 3010))
+            }
+        }
+
+        It 'installWithPackageManager works with hash table installation method' {
+            InModuleScope 'InstallHelpers' {
+                $script:execCalls = @()
+                $script:installCalls = @()
+
+                $apps = @(
+                    [PSCustomObject]@{
+                        Name = 'pkg-a'
+                        Info = @{ winget = 'Contoso.A' }
+                    }
+                    [PSCustomObject]@{
+                        Name = 'pkg-b'
+                        Info = @{ winget = [string[]]@('upgrade', 'Contoso.B') }
+                    }
+                    [PSCustomObject]@{
+                        Name = 'pkg-c'
+                        Info = @{
+                            winget = {
+                                param($appName, $appInfo, $execute)
+                                & $execute -- install 'Contoso.C'
+                            }
+                        }
+                    }
                 )
 
                 $execute = { $script:execCalls += , @($args) }

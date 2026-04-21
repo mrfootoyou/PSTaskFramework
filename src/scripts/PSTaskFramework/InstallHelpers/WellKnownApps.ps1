@@ -100,6 +100,6 @@ function script:installDockerLinux {
         Invoke-Shell -- sudo sh $script
     }
     finally {
-        if (Test-Path $script) { Remove-Item $script -ErrorAction Continue }
+        if (Test-Path $script) { Remove-Item $script -ErrorAction SilentlyContinue }
     }
 }

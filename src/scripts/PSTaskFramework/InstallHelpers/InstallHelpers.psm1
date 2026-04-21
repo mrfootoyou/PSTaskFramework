@@ -254,9 +254,13 @@ function installWithPackageManager {
         if ($method -is [string] -and $method) {
             $packageIds += $method
         }
-        elseif ($method -is [string[]] -or $method -is [System.Collections.IDictionary]) {
+        elseif ($method -is [string[]]) {
             Write-Verbose "Using $PackageManagerName with custom args to install '$appName'."
             & $Execute -- @method
+        }
+        elseif ($method -is [System.Collections.IDictionary]) {
+            Write-Verbose "Using $PackageManagerName with dictionary args to install '$appName'."
+            & $Execute @method
         }
         elseif ($method -is [scriptblock]) {
             Write-Verbose "Using $PackageManagerName with custom script to install '$appName'."
