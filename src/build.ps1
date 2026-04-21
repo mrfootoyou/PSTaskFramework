@@ -10,12 +10,15 @@
     PowerShell 7.4 or later is required to use this script. See https://aka.ms/install-powershell.
 .EXAMPLE
     PS> ./build.ps1
+
     Executes the default 'build' task, including all of its dependencies (e.g. 'restore').
 .EXAMPLE
     PS> ./build.ps1 list
+
     Lists all available tasks.
 .EXAMPLE
     PS> ./build.ps1 test -noDeps
+
     Executes the 'test' task without executing its dependencies.
 .NOTES
     SPDX-License-Identifier: Unlicense
