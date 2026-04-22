@@ -62,8 +62,9 @@ function Push-Secret {
     .DESCRIPTION
         Registers a secret value to be masked in the output of Protect-Secret.
 
-        The secret is reference counted, thus every call to `Push-Secret X` must have
-        a corresponding `Pop-Secret X`.
+        Note that secrets are reference counted, thus if a secret value is pushed
+        multiple times, it must be popped the same number of times to be fully
+        unregistered.
     #>
     [CmdletBinding()]
     param (
@@ -84,10 +85,19 @@ function Pop-Secret {
     <#
     .DESCRIPTION
         Unregisters a secret value previously registered with Push-Secret.
+
+        Note that secrets are reference counted, thus if a secret value is pushed
+        multiple times, it must be popped the same number of times to be fully
+        unregistered.
+
+        An error is reported if the secret value was not previously registered or
+        if it has already been popped the same number of times it was pushed.
+        Use `-ErrorAction SilentlyContinue` or `-ErrorAction Ignore` to suppress
+        such errors.
     #>
     [CmdletBinding()]
     param (
-        # The secret value to unregister. Must have been previously registered with Push-Secret.
+        # The secret value which was previously registered with Push-Secret.
         [Parameter(Mandatory, ValueFromPipeline)]
         [ValidateNotNullOrEmpty()]
         [string]$Value
@@ -95,7 +105,7 @@ function Pop-Secret {
     process {
         $secrets = getState
         if (!$secrets.values.ContainsKey($Value)) {
-            Write-Error -Exception 'Secret not found.' -CategoryActivity 'Pop-Secret'
+            Write-Error -Exception 'Secret not found.' -CategoryActivity 'Pop-Secret' -Category 'ObjectNotFound' -ErrorId 'SecretNotFound' -TargetObject $Value
             return
         }
         $n = ($secrets.values[$Value] -= 1)
