@@ -19,7 +19,7 @@ Describe 'PSTaskFramework.Secrets Module' {
         # any global secrets.
         $state = @{
             secrets = [PSCustomObject]@{
-                values = @{}
+                values = [System.Collections.Generic.Dictionary[string, int]]::new([System.StringComparer]::Ordinal)
                 regex  = $null
             }
             isCI    = $false
@@ -46,6 +46,16 @@ Describe 'PSTaskFramework.Secrets Module' {
             $state.secrets.values['top secret'] | Should -Be 3
         }
 
+        It 'treats pushed secrets case-sensitively' {
+            Push-Secret 'top secret'
+            Push-Secret 'Top Secret'
+            Push-Secret 'TOP SECRET'
+
+            $state.secrets.values['top secret'] | Should -Be 1
+            $state.secrets.values['Top Secret'] | Should -Be 1
+            $state.secrets.values['TOP SECRET'] | Should -Be 1
+        }
+
         It 'rejects empty secret values' {
             { Push-Secret '' } | Should -Throw '*The argument is null or empty*'
             { Push-Secret $null } | Should -Throw '*The argument is null or empty*'
@@ -61,8 +71,25 @@ Describe 'PSTaskFramework.Secrets Module' {
             $state.secrets.values['top secret'] | Should -Be 1
         }
 
-        It 'is okay when popping a secret that was never pushed' {
+        It 'treats popped secrets case-sensitively' {
+            Push-Secret 'top secret'
+            Push-Secret 'Top Secret'
+            Push-Secret 'TOP SECRET'
+            $state.secrets.Values.Count | Should -Be 3
+
+            Pop-Secret 'top secret'
+            Pop-Secret 'Top Secret'
+            Pop-Secret 'TOP SECRET'
+
+            $state.secrets.Values.Count | Should -Be 0
+        }
+
+        It 'throws when popping a secret that was never pushed' {
             { Pop-Secret 'nonexistent-secret' -ea Stop } | Should -Throw '*Secret not found.*'
+        }
+
+        It 'supports ErrorAction ignore when popping a secret that was never pushed' {
+            { Pop-Secret 'nonexistent-secret' -ea Ignore } | Should -Not -Throw
         }
 
         It 'rejects empty secret values' {

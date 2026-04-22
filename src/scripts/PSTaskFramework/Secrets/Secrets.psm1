@@ -17,13 +17,13 @@ param(
 
 if ($SecretScope -eq 'Local') {
     $script:secrets = [PSCustomObject]@{
-        values = @{}
+        values = [System.Collections.Generic.Dictionary[string, int]]::new([System.StringComparer]::Ordinal)
         regex  = $null
     }
 }
 else {
     $global:__PSTaskFramework_Secrets ??= [PSCustomObject]@{
-        values = @{}
+        values = [System.Collections.Generic.Dictionary[string, int]]::new([System.StringComparer]::Ordinal)
         regex  = $null
     }
     $script:secrets = $global:__PSTaskFramework_Secrets
@@ -62,6 +62,9 @@ function Push-Secret {
     .DESCRIPTION
         Registers a secret value to be masked in the output of Protect-Secret.
 
+        Secret values are case-sensitive and are compared using ordinal string
+        comparison.
+
         Note that secrets are reference counted, thus if a secret value is pushed
         multiple times, it must be popped the same number of times to be fully
         unregistered.
@@ -85,6 +88,9 @@ function Pop-Secret {
     <#
     .DESCRIPTION
         Unregisters a secret value previously registered with Push-Secret.
+
+        Secret values are case-sensitive and are compared using ordinal string
+        comparison.
 
         Note that secrets are reference counted, thus if a secret value is pushed
         multiple times, it must be popped the same number of times to be fully
