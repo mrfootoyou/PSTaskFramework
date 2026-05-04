@@ -28,6 +28,10 @@ Describe 'PSTaskFramework.Secrets Module' {
 
         # Mock isContinuousIntegration to return false by default
         Mock isContinuousIntegration -ModuleName Secrets { $state.isCI }
+
+        # Mock Write-Information and Write-Verbose to prevent test output pollution.
+        Mock Write-Information -ModuleName Secrets { }
+        Mock Write-Verbose -ModuleName Secrets { }
     }
 
     AfterEach {

@@ -13,6 +13,11 @@ param()
 Describe 'PSTaskFramework Module' {
     BeforeAll {
         Import-Module "$PSScriptRoot/PSTaskFramework" -Scope Local -Verbose:$false
+
+        # Mock Write-Information and Write-Verbose to prevent test output pollution.
+        Mock Write-Information -ModuleName PSTaskFramework { }
+        Mock Write-Verbose -ModuleName PSTaskFramework { }
+
         Reset-TaskFramework
     }
 
