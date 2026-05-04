@@ -20,6 +20,10 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
         Mock Install-Module -ModuleName InstallHelpers {
             throw 'Install-Module called from unit test!'
         }
+
+        # Mock Write-Information and Write-Verbose to prevent test output pollution.
+        Mock Write-Information -ModuleName InstallHelpers { }
+        Mock Write-Verbose -ModuleName InstallHelpers { }
     }
 
     BeforeEach {

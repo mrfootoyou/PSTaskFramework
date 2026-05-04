@@ -13,6 +13,10 @@ param()
 Describe 'PSTaskFramework.BuildHelpers Module' {
     BeforeAll {
         Import-Module "$PSScriptRoot/BuildHelpers" -Scope Local -Verbose:$false
+
+        # Mock Write-Information and Write-Verbose to prevent test output pollution.
+        Mock Write-Information -ModuleName BuildHelpers { }
+        Mock Write-Verbose -ModuleName BuildHelpers { }
     }
 
     Context 'Assert-AppExists' {
@@ -53,7 +57,6 @@ Describe 'PSTaskFramework.BuildHelpers Module' {
     Context 'Invoke-Shell' {
         It 'echoes command text and succeeds for zero exit code' {
             Mock Assert-AppExists -ModuleName BuildHelpers { 'pwsh' }
-            Mock Write-Information -ModuleName BuildHelpers { }
 
             Invoke-Shell -InformationAction Continue -- pwsh -NoLogo -NoProfile -Command 'exit 0'
 
@@ -64,7 +67,7 @@ Describe 'PSTaskFramework.BuildHelpers Module' {
         It 'suppresses command echo when InformationAction Ignore is specified' {
             Mock Assert-AppExists -ModuleName BuildHelpers { 'pwsh' }
 
-            $output = Invoke-Shell -InformationAction Ignore -- pwsh -NoLogo -NoProfile -Command 'exit 0' *>&1
+            $output = Invoke-Shell -- pwsh -NoLogo -NoProfile -Command 'exit 0' *>&1
 
             $output | Should -BeNullOrEmpty
         }

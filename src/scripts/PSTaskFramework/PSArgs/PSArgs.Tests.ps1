@@ -14,6 +14,10 @@ param()
 Describe 'PSTaskFramework.PSArgs Module' {
     BeforeAll {
         Import-Module "$PSScriptRoot/PSArgs" -Verbose:$false
+
+        # Mock Write-Information and Write-Verbose to prevent test output pollution.
+        Mock Write-Information -ModuleName PSArgs { }
+        Mock Write-Verbose -ModuleName PSArgs { }
     }
 
     Context 'ConvertTo-PSString' {

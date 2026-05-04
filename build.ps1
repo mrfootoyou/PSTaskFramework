@@ -61,6 +61,7 @@ param (
     [switch] $SkipDependencies
 )
 $ErrorActionPreference = 'Stop'
+$InformationPreference = 'Continue'
 
 # Define the repository root and scripts directory. All tasks will be executed in the
 # context of the repository root ($RepoRoot).
@@ -129,8 +130,8 @@ Task bootstrap -desc 'Installs required tools' {
         'git'        = $null # well-known app
         'powershell' = $null # well-known app
     }
-    Install-RequiredApp $appsToInstall -InstallPackageManagers -InformationAction Continue -Verbose:($VerbosePreference -eq 'Continue')
-    Install-PowerShellModule -ModuleVersions $PSModuleVersions -InformationAction Continue
+    Install-RequiredApp $appsToInstall -InstallPackageManagers
+    Install-PowerShellModule -ModuleVersions $PSModuleVersions
 }
 
 Task version -desc 'Display tool versions' {
@@ -350,6 +351,4 @@ Invoke-TaskFramework `
     -WorkingDirectory $RepoRoot `
     -Variables $Variables `
     -ImportScripts $ImportScripts `
-    -ExitOnError `
-    -InformationAction Continue `
-    -Verbose:($VerbosePreference -eq 'Continue')
+    -ExitOnError
