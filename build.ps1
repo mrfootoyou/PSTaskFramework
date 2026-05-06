@@ -40,8 +40,7 @@ param (
         'test',
         'analysis'
     )]
-    [string[]]
-    $TaskName = @('test', 'analysis'),
+    [string[]] $TaskName = @('test', 'analysis'),
 
     # Task-specific arguments for the task specified in -TaskName.
     # Cannot be used when -TaskName contains multiple tasks.
@@ -54,7 +53,8 @@ param (
     # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
     # while the second '-v' is passed to 'myTask' as a task-specific argument.
     [Parameter(ValueFromRemainingArguments, DontShow)]
-    [object[]] $TaskArgs,
+    [ValidateNotNull()]
+    [object[]] $TaskArgs = @(),
 
     # When specified, dependencies of the task(s) will not be executed.
     # Default is execute all dependencies (and their dependencies).

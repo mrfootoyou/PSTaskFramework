@@ -32,6 +32,7 @@ function Get-WellKnownAppInfo {
         # Defaults to '*'.
         [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [SupportsWildcards()]
+        [ValidateNotNullOrEmpty()]
         [string[]] $Name = @('*')
     )
     process {

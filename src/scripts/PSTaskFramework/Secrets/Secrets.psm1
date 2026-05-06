@@ -72,7 +72,6 @@ function Push-Secret {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, ValueFromPipeline)]
-        [ValidateNotNullOrEmpty()]
         [string]$Value
     )
     process {
@@ -105,7 +104,6 @@ function Pop-Secret {
     param (
         # The secret value which was previously registered with Push-Secret.
         [Parameter(Mandatory, ValueFromPipeline)]
-        [ValidateNotNullOrEmpty()]
         [string]$Value
     )
     begin {
@@ -140,7 +138,7 @@ function Protect-Secret {
         [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
         [AllowEmptyString()]
         [string]$Message,
-        [AllowEmptyString()]
+        [ValidateNotNull()]
         [string]$Mask = '****'
     )
     process {

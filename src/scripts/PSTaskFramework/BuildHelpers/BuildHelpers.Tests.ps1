@@ -89,6 +89,14 @@ Describe 'PSTaskFramework.BuildHelpers Module' {
 
             $global:LASTEXITCODE | Should -Be 5
         }
+
+        It 'ignores non-zero exit codes when AllowedExitCodes is empty' {
+            Mock Assert-AppExists -ModuleName BuildHelpers { 'pwsh' }
+
+            Invoke-Shell -AllowedExitCodes @() -- pwsh -NoLogo -NoProfile -Command 'exit 5'
+
+            $global:LASTEXITCODE | Should -Be 5
+        }
     }
 
     Context 'Test-Administrator' {

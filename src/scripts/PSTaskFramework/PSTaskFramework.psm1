@@ -158,8 +158,11 @@ function addTask {
         [Parameter(Mandatory, Position = 1)]
         [AllowNull()]
         [ScriptBlock]$Action,
+        [ValidateNotNull()]
         [string]$Description,
+        [ValidateNotNull()]
         [string[]]$DependsOn = @(),
+        [ValidateNotNull()]
         [int[]]$AllowedExitCodes = @(0)
     )
     try {
@@ -195,15 +198,18 @@ function Task {
         [ScriptBlock]$Action,
 
         # A brief description of the task.
+        [ValidateNotNull()]
         [string]$Description,
 
         # An array of task names that this task depends on. These tasks will be executed
         # before this task unless -SkipDependencies is specified when invoking.
+        [ValidateNotNull()]
         [string[]]$DependsOn = @(),
 
         # An array of allowed exit codes for the task. If the task completes with an
         # exit code that is not in this array, it will be considered a failure. Pass an
         # empty array to ignore the exit code. Defaults to 0.
+        [ValidateNotNull()]
         [int[]]$AllowedExitCodes = @(0)
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, InformationAction
@@ -241,6 +247,7 @@ function Add-TaskFrameworkDefaultTasks {
         [string[]] $Include = @('help', 'list'),
 
         # A hashtable specifying custom names for the default tasks.
+        [ValidateNotNull()]
         [hashtable] $NameMap = @{}
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync WarningAction, Verbose
@@ -351,18 +358,23 @@ function Get-TaskFrameworkHelp {
         [string]$TaskName,
 
         # The arguments to pass to Get-Help when retrieving help info for the build script and task action.
+        [ValidateNotNull()]
         [hashtable]$GetHelpArgs = @{},
 
         # The name of the Help task. Defaults to 'help'.
+        [ValidateNotNullOrEmpty()]
         [string]$HelpTaskName = 'help',
 
         # The path to the build script. This is used to get the help info for
         # the build script so that we can merge it with the task help.
         # Defaults to './build.ps1'.
+        [ValidateNotNullOrEmpty()]
         [string]$BuildScriptPath = './build.ps1',
         # The name of the parameter used to specify the task name when invoking the build script.
+        [ValidateNotNullOrEmpty()]
         [string]$TaskNameArgName = 'TaskName',
         # The name of the parameter used to specify task arguments when invoking the build script.
+        [ValidateNotNullOrEmpty()]
         [string]$TaskArgsArgName = 'TaskArgs'
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
@@ -592,7 +604,9 @@ function Repair-TaskStackTrace {
         with the filename and line number of the task action.
     #>
     param(
+        [Parameter(Mandatory)]
         [System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [Parameter(Mandatory)]
         [TaskDefinition]$Task,
         # The line where the task action starts within the Invoke-Expression command.
         [int]$TaskActionStartLine = 2
@@ -663,10 +677,14 @@ function Invoke-Task {
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingInvokeExpression', '', Justification = 'Using Invoke-Expression is necessary to allow task actions to accept named arguments.')]
     param(
+        [Parameter(Mandatory)]
         [TaskDefinition]$Task,
-        [object[]]$TaskArgs,
-        [hashtable]$Variables,
-        [string[]]$ImportScripts
+        [ValidateNotNull()]
+        [object[]]$TaskArgs = @(),
+        [ValidateNotNull()]
+        [hashtable]$Variables = @{},
+        [ValidateNotNull()]
+        [string[]]$ImportScripts = @()
     )
 
     if ($null -eq $Task.Action) {
@@ -751,6 +769,7 @@ function Invoke-TaskFramework {
         [string[]]$TaskName,
 
         # Task-specific arguments. Can only be used when invoking a _single_ task.
+        [ValidateNotNull()]
         [object[]]$TaskArgs = @(),
 
         # Indicates whether to skip invoking dependencies of specified tasks. Defaults to $false.
@@ -758,10 +777,12 @@ function Invoke-TaskFramework {
 
         # A list of scripts to import into the scope of invoked tasks. This can be used to share
         # helper functions across tasks.
+        [ValidateNotNull()]
         [string[]]$ImportScripts = @(),
 
         # A hashtable of variables to import into the scope of invoked tasks. This can be used to
         # pass configuration or state to tasks.
+        [ValidateNotNull()]
         [hashtable]$Variables = @{},
 
         # Indicates that the function should exit the script if a failure occurs. If not specified,

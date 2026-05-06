@@ -50,18 +50,16 @@ param (
         'package',
         'push'
     )]
-    [string[]]
-    $TaskName = @('build'),
+    [string[]] $TaskName = @('build'),
 
     # The build configuration to use when executing tasks that support it (e.g. 'build', 'test').
     # Defaults to 'debug'.
     [ValidateSet('debug', 'release')]
-    [string]
-    $Configuration = 'debug',
+    [string] $Configuration = 'debug',
 
     # The version to use when executing tasks that support it (e.g. 'build', 'package').
-    [string]
-    $Version,
+    [ValidateNotNullOrEmpty()]
+    [string] $Version,
 
     # Task-specific arguments for the task specified in -TaskName.
     # Cannot be used when -TaskName contains multiple tasks.
@@ -74,7 +72,8 @@ param (
     # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
     # while the second '-v' is passed to 'myTask' as a task-specific argument.
     [Parameter(ValueFromRemainingArguments)]
-    [object[]] $TaskArgs,
+    [ValidateNotNull()]
+    [object[]] $TaskArgs = @(),
 
     # When specified, dependencies of the task(s) will not be executed.
     # Default is execute all dependencies (and their dependencies).

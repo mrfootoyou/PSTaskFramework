@@ -64,8 +64,8 @@ Describe 'PSTaskFramework.Secrets Module' {
         }
 
         It 'rejects empty secret values' {
-            { Push-Secret '' } | Should -Throw '*The argument is null or empty*'
-            { Push-Secret $null } | Should -Throw '*The argument is null or empty*'
+            { Push-Secret '' } | Should -Throw '*because it is an empty string*'
+            { Push-Secret $null } | Should -Throw '*because it is an empty string*'
         }
     }
 
@@ -100,8 +100,8 @@ Describe 'PSTaskFramework.Secrets Module' {
         }
 
         It 'rejects empty secret values' {
-            { Pop-Secret '' } | Should -Throw '*The argument is null or empty*'
-            { Pop-Secret $null } | Should -Throw '*The argument is null or empty*'
+            { Pop-Secret '' } | Should -Throw '*because it is an empty string*'
+            { Pop-Secret $null } | Should -Throw '*because it is an empty string*'
         }
     }
 
