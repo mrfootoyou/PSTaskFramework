@@ -153,7 +153,10 @@ function addTask {
     #>
     [CmdletBinding()]
     param (
+        [Parameter(Mandatory, Position = 0)]
         [string]$Name,
+        [Parameter(Mandatory, Position = 1)]
+        [AllowNull()]
         [ScriptBlock]$Action,
         [string]$Description,
         [string[]]$DependsOn = @(),
@@ -395,7 +398,7 @@ function Add-TaskFrameworkDefaultTasks {
     [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingEmptyCatchBlock', '')]
     param(
         # The tasks to include.
-        [ValidateSet('help', 'list')]
+        [ValidateSet('help', 'list', 'null')]
         [string[]] $Include = @('help', 'list'),
 
         # A hashtable specifying custom names for the default tasks.
@@ -407,7 +410,7 @@ function Add-TaskFrameworkDefaultTasks {
         'null' {
             $name = $NameMap[$_] ?? $_
             Write-Verbose "Including default 'null' task as '$name'."
-            addTask $name -Description 'An empty task that does nothing.'
+            addTask $name -Description 'An empty task that does nothing.' -Action $null
         }
         'list' {
             $name = $NameMap[$_] ?? $_

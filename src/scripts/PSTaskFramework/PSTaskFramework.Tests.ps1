@@ -331,15 +331,90 @@ function Get-Message {
             $tasks.Name | Should -Contain 'list'
         }
 
-        It 'list task outputs task table when invoked' {
-            Task 'sample' -Description 'a sample task' {}
-            Add-TaskFrameworkDefaultTasks -Include 'list'
+        Describe 'default "list" task' {
+            BeforeEach {
+                Task 'task2' -Description 'described task 2' -DependsOn 'task1' {}
+                Task 'task1' -Description 'described task 1' -DependsOn 'list' {}
+                Add-TaskFrameworkDefaultTasks -Include 'list'
 
-            Mock Out-Host -ModuleName PSTaskFramework {}
+                $output = [System.Collections.Generic.List[object]]::new()
+                Mock Out-Host -ModuleName PSTaskFramework {
+                    $output.AddRange(@($InputObject))
+                }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'list' -SkipDependencies
+                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'list'
+            }
 
-            Should -Invoke Out-Host -ModuleName PSTaskFramework -Times 1
+            It 'should invoke Out-Host to display output' {
+                Should -Invoke Out-Host -ModuleName PSTaskFramework -Times 1
+            }
+
+            It 'lists all tasks with descriptions in dependency order' {
+                $text = ($output | Out-String).Trim()
+                $text | Should -BeExactly @'
+Name  Description            DependsOn
+----  -----------            ---------
+list  List all defined tasks {}
+task1 described task 1       {list}
+task2 described task 2       {task1}
+'@
+            }
+        }
+
+        Describe 'default "help" task' {
+            BeforeEach {
+                Mock Get-TaskFrameworkHelp -ModuleName PSTaskFramework { 'mocked help' }
+                Mock Out-Host -ModuleName PSTaskFramework {}
+            }
+
+            It 'calls Get-TaskFrameworkHelp when invoked' {
+                Add-TaskFrameworkDefaultTasks -Include 'help'
+
+                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'help'
+
+                Should -Invoke Get-TaskFrameworkHelp -ModuleName PSTaskFramework -Times 1
+                Should -Invoke Out-Host -ModuleName PSTaskFramework -Times 1
+            }
+
+            It 'calls Get-TaskFrameworkHelp when context is customized' {
+                Add-TaskFrameworkDefaultTasks -Include 'list', 'help' -NameMap @{ help = 'getHelp' }
+
+                $invokeArgs = @{
+                    WorkingDirectory = $TestDrive
+                    TaskName         = 'getHelp'
+                    TaskArgs         = @('list', '-full')
+                    Variables        = @{
+                        TaskNameArgName = 'tName'
+                        TaskArgsArgName = 'tArgs'
+                        BuildInvocation = [PSCustomObject]@{
+                            MyCommand = [PSCustomObject]@{
+                                Path = 'c:/foo/myBuild.ps1'
+                            }
+                        }
+                    }
+                }
+                Invoke-TaskFramework @invokeArgs
+
+                Should -Invoke Get-TaskFrameworkHelp -ModuleName PSTaskFramework -Times 1 -ParameterFilter {
+                    $BuildScriptPath | Should -Be 'c:/foo/myBuild.ps1'
+                    $TaskName | Should -Be 'list'
+                    $HelpTaskName | Should -Be 'getHelp'
+                    $TaskNameArgName | Should -Be 'tName'
+                    $TaskArgsArgName | Should -Be 'tArgs'
+                    $GetHelpArgs.Keys | Should -Contain 'Full'
+                    $true
+                }
+            }
+        }
+
+        Describe 'default "null" task' {
+            It 'should do nothing when invoked' {
+                Add-TaskFrameworkDefaultTasks -Include 'null'
+
+                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'null'
+
+                $global:LASTEXITCODE | Should -Be 0
+            }
         }
     }
 
