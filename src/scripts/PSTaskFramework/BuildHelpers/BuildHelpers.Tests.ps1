@@ -12,6 +12,9 @@ param()
 
 Describe 'PSTaskFramework.BuildHelpers Module' {
     BeforeAll {
+        $ErrorActionPreference = 'Stop'
+        $global:LASTEXITCODE = 0
+
         Import-Module "$PSScriptRoot/BuildHelpers" -Scope Local -Verbose:$false
 
         # Mock Write-Information and Write-Verbose to prevent test output pollution.
@@ -83,6 +86,14 @@ Describe 'PSTaskFramework.BuildHelpers Module' {
             Mock Assert-AppExists -ModuleName BuildHelpers { 'pwsh' }
 
             Invoke-Shell -AllowedExitCodes @(0, 5) -- pwsh -NoLogo -NoProfile -Command 'exit 5'
+
+            $global:LASTEXITCODE | Should -Be 5
+        }
+
+        It 'ignores non-zero exit codes when AllowedExitCodes is empty' {
+            Mock Assert-AppExists -ModuleName BuildHelpers { 'pwsh' }
+
+            Invoke-Shell -AllowedExitCodes @() -- pwsh -NoLogo -NoProfile -Command 'exit 5'
 
             $global:LASTEXITCODE | Should -Be 5
         }

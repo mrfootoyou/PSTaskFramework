@@ -33,6 +33,7 @@ param (
     [Parameter(Position = 0)]
     [ValidateSet(
         'list',
+        'help',
         'bootstrap',
         'version',
         'updateTools',
@@ -49,18 +50,16 @@ param (
         'package',
         'push'
     )]
-    [string[]]
-    $TaskName = @('build'),
+    [string[]] $TaskName = @('build'),
 
     # The build configuration to use when executing tasks that support it (e.g. 'build', 'test').
     # Defaults to 'debug'.
     [ValidateSet('debug', 'release')]
-    [string]
-    $Configuration = 'debug',
+    [string] $Configuration = 'debug',
 
     # The version to use when executing tasks that support it (e.g. 'build', 'package').
-    [string]
-    $Version,
+    [ValidateNotNullOrEmpty()]
+    [string] $Version,
 
     # Task-specific arguments for the task specified in -TaskName.
     # Cannot be used when -TaskName contains multiple tasks.
@@ -73,7 +72,8 @@ param (
     # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
     # while the second '-v' is passed to 'myTask' as a task-specific argument.
     [Parameter(ValueFromRemainingArguments)]
-    [object[]] $TaskArgs,
+    [ValidateNotNull()]
+    [object[]] $TaskArgs = @(),
 
     # When specified, dependencies of the task(s) will not be executed.
     # Default is execute all dependencies (and their dependencies).
@@ -105,10 +105,11 @@ $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 # - $TasksToExecute: The ordered list of all tasks to execute.
 # - $Variables: The dictionary of variables to import into each task's scope.
 $Variables = @{
-    RepoRoot      = $RepoRoot
-    ScriptsDir    = $ScriptsDir
-    Configuration = $Configuration
-    Version       = $Version
+    RepoRoot        = $RepoRoot
+    ScriptsDir      = $ScriptsDir
+    BuildInvocation = $MyInvocation
+    Configuration   = $Configuration
+    Version         = $Version
     # Add more variables here as needed
 }
 
@@ -122,10 +123,7 @@ $ImportScripts = @(
 ####################################################################################
 Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
 Reset-TaskFramework
-
-Task list -desc 'List all tasks' {
-    Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
-}
+Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
     <#

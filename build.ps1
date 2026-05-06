@@ -33,14 +33,14 @@ param (
     [Parameter(Position = 0)]
     [ValidateSet(
         'list',
+        'help',
         'bootstrap',
         'version',
         'clean',
         'test',
         'analysis'
     )]
-    [string[]]
-    $TaskName = @('test', 'analysis'),
+    [string[]] $TaskName = @('test', 'analysis'),
 
     # Task-specific arguments for the task specified in -TaskName.
     # Cannot be used when -TaskName contains multiple tasks.
@@ -53,7 +53,8 @@ param (
     # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
     # while the second '-v' is passed to 'myTask' as a task-specific argument.
     [Parameter(ValueFromRemainingArguments, DontShow)]
-    [object[]] $TaskArgs,
+    [ValidateNotNull()]
+    [object[]] $TaskArgs = @(),
 
     # When specified, dependencies of the task(s) will not be executed.
     # Default is execute all dependencies (and their dependencies).
@@ -92,6 +93,7 @@ $PSModuleVersions = @{
 $Variables = @{
     RepoRoot         = $RepoRoot
     ScriptsDir       = $ScriptsDir
+    BuildInvocation  = $MyInvocation
     PSModuleVersions = $PSModuleVersions
     # Add more variables here as needed
 }
@@ -106,10 +108,7 @@ $ImportScripts = @(
 ####################################################################################
 Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
 Reset-TaskFramework
-
-Task list -desc 'List all tasks' {
-    Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
-}
+Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
     <#

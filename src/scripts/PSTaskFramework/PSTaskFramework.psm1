@@ -6,7 +6,7 @@
     Source: http://github.com/mrfootoyou/pstaskframework
 #>
 #Requires -Version 7.4
-# spell:ignore psargs,targs
+# spell:ignore psargs,targs,maml
 
 param()
 
@@ -33,6 +33,17 @@ class TaskDefinition {
         }
         [TaskDefinition]::AllTasks[$task.Name] = $task
         [TaskDefinition]::TasksSorted = $false
+    }
+
+    static [TaskDefinition] TryGetTask([string]$taskName) {
+        if (-not [TaskDefinition]::AllTasks.Contains($taskName)) {
+            return $null
+        }
+        return [TaskDefinition]::AllTasks[$taskName]
+    }
+
+    static [TaskDefinition] GetTask([string]$taskName) {
+        return [TaskDefinition]::TryGetTask($taskName) ?? (throw "Task '$taskName' not found.")
     }
 
     # Returns an ordered array of TaskDefinition objects corresponding to the specified task
@@ -96,7 +107,7 @@ class TaskDefinition {
             }
             $visited[$task.Name] = 'visiting'
             foreach ($dep in $task.DependsOn) {
-                $depTask = [TaskDefinition]::AllTasks[$dep]
+                $depTask = [TaskDefinition]::TryGetTask($dep)
                 if (-not $depTask) {
                     throw "Dependency '$dep' of task '$($task.Name)' not found."
                 }
@@ -133,6 +144,41 @@ function Reset-TaskFramework {
     [TaskDefinition]::Clear()
 }
 
+function addTask {
+    <#
+    .DESCRIPTION
+        Private implementation of the `Task` function that adds a task to the task framework.
+        This is separated from the public Task function to allow for easier error handling and
+        to avoid syncing caller preferences multiple times when adding multiple tasks.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Name,
+        [Parameter(Mandatory, Position = 1)]
+        [AllowNull()]
+        [ScriptBlock]$Action,
+        [ValidateNotNull()]
+        [string]$Description,
+        [ValidateNotNull()]
+        [string[]]$DependsOn = @(),
+        [ValidateNotNull()]
+        [int[]]$AllowedExitCodes = @(0)
+    )
+    try {
+        [TaskDefinition]::AddTask(@{
+                Name             = $Name
+                Description      = $Description
+                DependsOn        = $DependsOn
+                Action           = $Action
+                AllowedExitCodes = $AllowedExitCodes
+            })
+    }
+    catch {
+        Write-Error -Exception $_.Exception -CategoryActivity 'Add task' -Category ResourceExists -TargetObject $Name
+    }
+}
+
 function Task {
     <#
     .DESCRIPTION
@@ -152,24 +198,22 @@ function Task {
         [ScriptBlock]$Action,
 
         # A brief description of the task.
+        [ValidateNotNull()]
         [string]$Description,
 
         # An array of task names that this task depends on. These tasks will be executed
         # before this task unless -SkipDependencies is specified when invoking.
+        [ValidateNotNull()]
         [string[]]$DependsOn = @(),
 
         # An array of allowed exit codes for the task. If the task completes with an
         # exit code that is not in this array, it will be considered a failure. Pass an
         # empty array to ignore the exit code. Defaults to 0.
+        [ValidateNotNull()]
         [int[]]$AllowedExitCodes = @(0)
     )
-    [TaskDefinition]::AddTask(@{
-            Name             = $Name
-            Description      = $Description
-            DependsOn        = $DependsOn
-            Action           = $Action
-            AllowedExitCodes = $AllowedExitCodes
-        })
+    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, InformationAction
+    addTask @PSBoundParameters
 }
 
 function Get-TaskFrameworkTasks {
@@ -188,6 +232,350 @@ function Get-TaskFrameworkTasks {
     [CmdletBinding()]
     param()
     return [TaskDefinition]::GetOrderedTasks().Values
+}
+
+function Add-TaskFrameworkDefaultTasks {
+    <#
+    .DESCRIPTION
+        Adds default tasks to the task framework, such as 'list' and 'help'.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '')]
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingEmptyCatchBlock', '')]
+    param(
+        # The tasks to include.
+        [ValidateSet('help', 'list', 'null')]
+        [string[]] $Include = @('help', 'list'),
+
+        # A hashtable specifying custom names for the default tasks.
+        [ValidateNotNull()]
+        [hashtable] $NameMap = @{}
+    )
+    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync WarningAction, Verbose
+
+    switch ($Include.where{ ![TaskDefinition]::TryGetTask($_) }) {
+        'null' {
+            $name = $NameMap[$_] ?? $_
+            Write-Verbose "Including default 'null' task as '$name'."
+            addTask $name -Description 'An empty task that does nothing.' -Action $null
+        }
+        'list' {
+            $name = $NameMap[$_] ?? $_
+            Write-Verbose "Including default 'list' task as '$name'."
+            addTask $name -Description 'List all defined tasks' {
+                <#
+                .DESCRIPTION
+                    Lists all tasks defined in the task framework along with their descriptions
+                    and dependencies.
+                #>
+                Get-TaskFrameworkTasks |
+                Format-Table Name, Description, DependsOn -AutoSize |
+                Out-Host
+            }
+        }
+        'help' {
+            $name = $NameMap[$_] ?? $_
+            Write-Verbose "Including default 'help' task as '$name'."
+            addTask $name -Description 'Show detailed help for a task' {
+                <#
+                .DESCRIPTION
+                    Generates help for a task defined in the task framework. If a task name is not
+                    specified, it generates help for the build script itself.
+                .EXAMPLE
+                    PS> .\build.ps1 help
+
+                    Shows help for the build script.
+                .EXAMPLE
+                    PS> .\build.ps1 help test -full
+
+                    Shows detailed help for the 'test' task, including its description, parameters,
+                    usage, dependencies, and examples.
+                .EXAMPLE
+                    PS> .\build.ps1 help test -examples
+
+                    Shows the 'test' task examples.
+                #>
+                [CmdletBinding(PositionalBinding = $false)]
+                param(
+                    # The name of the task to show help for. If not specified, shows help for the build script itself.
+                    [Parameter(Position = 0)]
+                    [string]$TaskName,
+
+                    # Displays the entire help article for a cmdlet. Full includes parameter descriptions and attributes,
+                    # examples, input and output object types, and additional notes.
+                    [Parameter(ParameterSetName = 'Full')]
+                    [switch]$Full,
+
+                    # Adds parameter descriptions and examples to the basic help display.
+                    [Parameter(ParameterSetName = 'Detailed', Mandatory)]
+                    [switch]$Detailed,
+
+                    # Displays only the name, synopsis, and examples.
+                    [Parameter(ParameterSetName = 'Examples', Mandatory)]
+                    [switch]$Examples
+                )
+
+                $getHelpArgs = @{} + $PSBoundParameters
+                $getHelpArgs.Remove('TaskName') | Out-Null
+
+                $getTaskHelpArgs = @{
+                    GetHelpArgs     = $getHelpArgs
+                    HelpTaskName    = $Task.Name # this task's name
+                    BuildScriptPath = $BuildInvocation.MyCommand.Path ?? './build.ps1'
+                    TaskNameArgName = $TaskNameArgName ?? 'TaskName'
+                    TaskArgsArgName = $TaskArgsArgName ?? 'TaskArgs'
+                }
+                if ($TaskName) {
+                    $getTaskHelpArgs.TaskName = $TaskName
+                }
+
+                Get-TaskFrameworkHelp @getTaskHelpArgs | Out-Host
+            }
+        }
+        default {
+            Write-Warning "Unknown default task requested: '$_'."
+        }
+    }
+}
+
+function Get-TaskFrameworkHelp {
+    <#
+    .DESCRIPTION
+        Generates help for a task defined in the task framework. If a task name is not
+        specified, it generates help for the build script itself.
+
+        The help output is generated by merging the help info from the build script and the
+        task action. This allows the task help to include information about the build script's
+        parameters and syntax, which is relevant when invoking the task via the build script.
+    .OUTPUTS
+        [System.String]
+        The formatted help string.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingInvokeExpression', '', Justification = 'Necessary for dynamic function creation.')]
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        # The name of the task to show help for. If not specified, shows help for the build script itself.
+        [string]$TaskName,
+
+        # The arguments to pass to Get-Help when retrieving help info for the build script and task action.
+        [ValidateNotNull()]
+        [hashtable]$GetHelpArgs = @{},
+
+        # The name of the Help task. Defaults to 'help'.
+        [ValidateNotNullOrEmpty()]
+        [string]$HelpTaskName = 'help',
+
+        # The path to the build script. This is used to get the help info for
+        # the build script so that we can merge it with the task help.
+        # Defaults to './build.ps1'.
+        [ValidateNotNullOrEmpty()]
+        [string]$BuildScriptPath = './build.ps1',
+        # The name of the parameter used to specify the task name when invoking the build script.
+        [ValidateNotNullOrEmpty()]
+        [string]$TaskNameArgName = 'TaskName',
+        # The name of the parameter used to specify task arguments when invoking the build script.
+        [ValidateNotNullOrEmpty()]
+        [string]$TaskArgsArgName = 'TaskArgs'
+    )
+    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
+
+    $null = $TaskArgsArgName # avoid "unused parameter" warning
+
+    # Get the help info for the build script. We will merge it's parameters and syntax
+    # with the task help info to produce the final help output.
+    $buildHelp = Get-Help -Name $BuildScriptPath @GetHelpArgs
+    if (!$buildHelp) { return }
+
+    function normalizeText([string]$text) {
+        # trim and normalize line endings to CR to simplify regexes
+        $text = $text -creplace '\s*?\r?\n', "`n"
+        return $text
+    }
+    function finalizeText([string]$text) {
+        # Assumes CR line endings.
+        # remove empty section
+        $text = $text -creplace '(?m)^(SYNOPSIS|DESCRIPTION|INPUTS|OUTPUTS|RELATED LINKS)\n\n+', ''
+        # collapse consecutive empty lines
+        $text = $text -creplace '\n\n\n+', "`n`n"
+        # trim trailing empty lines to at most 1
+        $text = $text -creplace '\n\n$', "`n"
+        # convert to the environment's newline
+        $text = $text -creplace '\r?\n', [Environment]::NewLine
+        return $text
+    }
+
+    # If no task name specified, show the build script help
+    if (!$TaskName) {
+        $text = normalizeText ($buildHelp | Out-String)
+        return finalizeText $text
+    }
+
+    # Get the specified task...
+    $task = [TaskDefinition]::TryGetTask($TaskName)
+    if (-not $task) {
+        throw "Task '$TaskName' not found."
+    }
+
+    $TaskName = $task.Name # use the canonical name
+    $taskDescription = $task.Description
+    if ($taskDescription) {
+        # ensure ends with a period
+        $taskDescription = $taskDescription -replace '\.\s*$', '.'
+    }
+    $taskAction = $task.Action ?? ([scriptblock]::Create("
+        <#
+        .DESCRIPTION
+            This is a `"meta-task`" that only serves as a grouping of dependencies.
+            No additional help is available for this task.
+        #>
+        param()"))
+
+    # Use the taskAction to generate a temporary function that we can call Get-Help on to generate the
+    # help info. We use a unique name to aid in regex replacements later.
+    $functionName = "_$([Guid]::NewGuid().ToString('N'))"
+    $tempModule = New-Module -ScriptBlock ([scriptblock]::Create("function $functionName {$taskAction}"))
+    $taskHelp = Get-Help $functionName @GetHelpArgs
+    $tempModule | Remove-Module
+
+    # Fixup the help object...
+    function mamlParaTextItem($text) {
+        return [PSObject]@{ Text = $text; type = 'text' } |
+        Add-Member -TypeName 'MamlParaTextItem' -PassThru
+    }
+    function mamlParaText([string[]]$text) {
+        # must return an array of ParaTextItem
+        return , $text.ForEach{ mamlParaTextItem $_ }
+    }
+
+    # remove the ModuleName member
+    if ($taskHelp.ModuleName) {
+        $null = $taskHelp.PSObject.Members.Remove('ModuleName')
+    }
+
+    # fix the name
+    $taskHelp.details | Add-Member 'name' $TaskName -Force
+    $taskHelp | Add-Member 'Name' $TaskName -Force
+
+    # set Synopsis using the task description, if missing
+    if ($taskDescription) {
+        if (!$taskHelp.details.description) {
+            $taskHelp.details | Add-Member 'description' (mamlParaText $taskDescription) -Force
+        }
+        if (!$taskHelp.Synopsis) {
+            $taskHelp | Add-Member 'Synopsis' $taskDescription -Force
+        }
+    }
+
+    # merge the build script's parameters and syntax into the task's help...
+    $taskCommonParameters = $task.Action -and ($taskHelp.CommonParameters ?? $true)
+    $buildCommonParameters = $task.Action -and ($buildHelp.CommonParameters ?? $true)
+
+    $dashSwitch = [PSObject]@{
+        name          = '-'
+        description   = mamlParaText 'A meta-parameter used to separate build script parameters from task parameters.'
+        required      = $false
+        globbing      = $false
+        pipelineInput = $false
+        position      = 'named'
+    } | Add-Member -TypeName 'MamlCommandHelpInfo#parameter' -PassThru
+
+    # Update the description of the 'TaskName' parameter to indicate the value it should have to invoke the task.
+    foreach ($param in $buildHelp.parameters.parameter) {
+        if ($param.name -eq $TaskNameArgName) {
+            $param.description = mamlParaText "The name of the task to execute. '$TaskName' in this case."
+            break
+        }
+    }
+
+    # Merge parameters:
+    # We omit the build script's 'TaskArgs' parameters since the actual task args are already included.
+    if ($null -eq $taskHelp.parameters) {
+        $taskHelp | Add-Member 'parameters' ([PSCustomObject]@{ parameter = @() } | Add-Member -TypeName 'ExtendedCmdletHelpInfo#parameters' -PassThru) -Force
+    }
+    if ($null -eq $taskHelp.parameters.parameter) {
+        $taskHelp.parameters | Add-Member 'parameter' @() -Force
+    }
+    $taskHelp.parameters.parameter = @(
+        $buildHelp.parameters.parameter.where{ $_.name -ne $TaskArgsArgName }
+        if ($taskHelp.parameters.parameter.Count -or $taskCommonParameters) { $dashSwitch }
+        $taskHelp.parameters.parameter
+    )
+
+    # Merge Syntax:
+    # We omit the 'TaskName' parameter itself since the task name is fixed in this context.
+    # We only include those build script syntax items that include the 'TaskName' parameter
+    # since those are the ones relevant to invoking tasks.
+    $buildSyntaxItems = $buildHelp.syntax.syntaxItem.where{ $_.parameter.name -eq $TaskNameArgName }
+
+    if ($null -eq $taskHelp.syntax) {
+        $taskHelp | Add-Member 'syntax' ([PSCustomObject]@{ syntaxItem = @() }) -Force
+    }
+    if ($null -eq $taskHelp.syntax.syntaxItem) {
+        $taskHelp.syntax | Add-Member 'syntaxItem' @() -Force
+    }
+    if ($taskHelp.syntax.syntaxItem.Count -eq 0) {
+        # add a default syntaxItem so that we have somewhere to merge the build script syntax into
+        $taskHelp.syntax.syntaxItem += [PSCustomObject]@{
+            name      = $functionName
+            parameter = @()
+        } | Add-Member -TypeName 'MamlCommandHelpInfo#syntaxItem' -PassThru
+    }
+    $taskHelp.syntax.syntaxItem = @(
+        foreach ($buildSyntaxItem in $buildSyntaxItems) {
+            $buildParams = $buildSyntaxItem.parameter.where{ $_.name -notin $TaskNameArgName, $TaskArgsArgName }
+            foreach ($item in $taskHelp.syntax.syntaxItem) {
+                $copy = $item.PSObject.Copy() # shallow copy
+                $copy.name = "$BuildScriptPath [-$TaskNameArgName] $TaskName"
+                $copy | Add-Member 'parameter' @(
+                    $buildParams
+                    if ($item.parameter.Count -or $taskCommonParameters) { $dashSwitch }
+                    $item.parameter
+                ) -Force
+                $copy
+            }
+        }
+    )
+
+    # The remaining fixups are done via text manipulation on the help output.
+    $text = normalizeText ($taskHelp | Out-String)
+    function escapeRegex([string]$s) { return [regex]::Escape($s) }
+    function escapeReplacement([string]$s) { return $s.Replace('$', '$$') }
+
+    # change NAME heading to TASK NAME
+    $text = $text -creplace '(?m)^NAME$', 'TASK NAME'
+    # replace the temp function name with the build script help invocation.
+    $text = $text -creplace $functionName, (escapeReplacement "$BuildScriptPath $TaskName")
+
+    # Insert 'DEPENDS ON' section before RELATED LINKS or REMARKS
+    if ($text -match '(?m)^(RELATED LINKS|REMARKS)$') {
+        $insertBefore = $Matches[1]
+        $dependsOnText = @(
+            if ($task.DependsOn) {
+                'This task depends on the following tasks:'
+                $task.DependsOn.foreach{ "- $_" }
+            }
+            else {
+                'This task has no task dependencies.'
+            }
+        )
+        $dependsOnText = "DEPENDS ON`n    $($dependsOnText -join "`n    ")"
+        $text = $text -creplace "(?m)^$insertBefore`$", "$(escapeReplacement $dependsOnText)`n`n`$0"
+    }
+
+    if ($buildCommonParameters) {
+        # Insert build script's "[<CommonParameters>]" before the '--' separator
+        $text = $text -creplace "($(escapeRegex $BuildScriptPath) .*?)(\[--])", '$1[<CommonParameters>] $2'
+    }
+    if ($taskCommonParameters) {
+        # Rename the task's [<CommonParameters>] (the one after the '--') to avoid confusion with the
+        # build script's common parameters
+        $text = $text -creplace "($(escapeRegex $BuildScriptPath) .*? \[--] .*?)\[\<CommonParameters\>\]", '$1[<TaskCommonParameters>]'
+    }
+
+    # fixup the additional help remarks
+    $text = $text -creplace "Get-Help $(escapeRegex $TaskName) ", "$(escapeReplacement "$BuildScriptPath $HelpTaskName $TaskName") -- "
+
+    return finalizeText $text
 }
 
 function Repair-TaskStackTrace {
@@ -216,7 +604,9 @@ function Repair-TaskStackTrace {
         with the filename and line number of the task action.
     #>
     param(
+        [Parameter(Mandatory)]
         [System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [Parameter(Mandatory)]
         [TaskDefinition]$Task,
         # The line where the task action starts within the Invoke-Expression command.
         [int]$TaskActionStartLine = 2
@@ -287,10 +677,14 @@ function Invoke-Task {
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingInvokeExpression', '', Justification = 'Using Invoke-Expression is necessary to allow task actions to accept named arguments.')]
     param(
+        [Parameter(Mandatory)]
         [TaskDefinition]$Task,
-        [object[]]$TaskArgs,
-        [hashtable]$Variables,
-        [string[]]$ImportScripts
+        [ValidateNotNull()]
+        [object[]]$TaskArgs = @(),
+        [ValidateNotNull()]
+        [hashtable]$Variables = @{},
+        [ValidateNotNull()]
+        [string[]]$ImportScripts = @()
     )
 
     if ($null -eq $Task.Action) {
@@ -375,6 +769,7 @@ function Invoke-TaskFramework {
         [string[]]$TaskName,
 
         # Task-specific arguments. Can only be used when invoking a _single_ task.
+        [ValidateNotNull()]
         [object[]]$TaskArgs = @(),
 
         # Indicates whether to skip invoking dependencies of specified tasks. Defaults to $false.
@@ -382,10 +777,12 @@ function Invoke-TaskFramework {
 
         # A list of scripts to import into the scope of invoked tasks. This can be used to share
         # helper functions across tasks.
+        [ValidateNotNull()]
         [string[]]$ImportScripts = @(),
 
         # A hashtable of variables to import into the scope of invoked tasks. This can be used to
         # pass configuration or state to tasks.
+        [ValidateNotNull()]
         [hashtable]$Variables = @{},
 
         # Indicates that the function should exit the script if a failure occurs. If not specified,
@@ -458,6 +855,8 @@ $exportModuleMemberParams = @{
         'Task'
         'Get-TaskFrameworkTasks'
         'Invoke-TaskFramework'
+        'Get-TaskFrameworkHelp'
+        'Add-TaskFrameworkDefaultTasks'
     )
 }
 

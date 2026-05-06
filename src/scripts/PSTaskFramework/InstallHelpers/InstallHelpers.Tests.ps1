@@ -14,6 +14,9 @@ param()
 
 Describe 'PSTaskFramework.InstallHelpers Module' {
     BeforeAll {
+        $ErrorActionPreference = 'Stop'
+        $global:LASTEXITCODE = 0
+
         Import-Module "$PSScriptRoot/InstallHelpers" -Scope Local -Verbose:$false
 
         # Mock Install-Module to prevent actual module installation in a poorly written test.

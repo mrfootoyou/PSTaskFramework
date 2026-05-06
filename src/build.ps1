@@ -17,9 +17,14 @@
 
     Lists all available tasks.
 .EXAMPLE
-    PS> ./build.ps1 test -noDeps
+    PS> ./build.ps1 clean -noDeps
 
-    Executes the 'test' task without executing its dependencies.
+    Executes the 'clean' task without executing its dependencies.
+.EXAMPLE
+    PS> ./build.ps1 help clean -full
+
+    Displays the help documentation for the 'clean' task.
+    Run `./build.ps1 help help -full` for more information on the help system.
 .NOTES
     SPDX-License-Identifier: Unlicense
     Source: http://github.com/mrfootoyou/pstaskframework
@@ -33,19 +38,18 @@ param (
     [Parameter(Position = 0)]
     [ValidateSet(
         'list',
+        'help',
         'bootstrap',
         'version',
         'clean',
         'build'
     )]
-    [string[]]
-    $TaskName = @('build'),
+    [string[]] $TaskName = @('build'),
 
     # The build configuration to use when executing tasks that support it (e.g. 'build', 'test').
     # Defaults to 'debug'.
     [ValidateSet('debug', 'release')]
-    [string]
-    $Configuration = 'debug',
+    [string] $Configuration = 'debug',
 
     # Task-specific arguments for the task specified in -TaskName.
     # Cannot be used when -TaskName contains multiple tasks.
@@ -58,7 +62,8 @@ param (
     # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
     # while the second '-v' is passed to 'myTask' as a task-specific argument.
     [Parameter(ValueFromRemainingArguments)]
-    [object[]] $TaskArgs,
+    [ValidateNotNull()]
+    [object[]] $TaskArgs = @(),
 
     # When specified, dependencies of the task(s) will not be executed.
     # Default is execute all dependencies (and their dependencies).
@@ -90,9 +95,10 @@ $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 # - $TasksToExecute: The ordered list of all tasks to execute.
 # - $Variables: The dictionary of variables to import into each task's scope.
 $Variables = @{
-    RepoRoot      = $RepoRoot
-    ScriptsDir    = $ScriptsDir
-    Configuration = $Configuration
+    RepoRoot        = $RepoRoot
+    ScriptsDir      = $ScriptsDir
+    BuildInvocation = $MyInvocation
+    Configuration   = $Configuration
     # Add more variables here as needed
 }
 
@@ -106,10 +112,7 @@ $ImportScripts = @(
 ####################################################################################
 Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
 Reset-TaskFramework
-
-Task list -desc 'List all tasks' {
-    Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
-}
+Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
     <#
