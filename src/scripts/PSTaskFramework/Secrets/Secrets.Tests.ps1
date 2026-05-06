@@ -13,6 +13,9 @@ param()
 
 Describe 'PSTaskFramework.Secrets Module' {
     BeforeAll {
+        $ErrorActionPreference = 'Stop'
+        $global:LASTEXITCODE = 0
+
         Import-Module "$PSScriptRoot/Secrets" -Scope Local -ArgumentList Local -Verbose:$false
 
         # Use a private secret store for testing to avoid interference with
