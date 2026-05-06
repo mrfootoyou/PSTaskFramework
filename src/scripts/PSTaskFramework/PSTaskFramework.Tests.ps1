@@ -339,4 +339,112 @@ function Get-Message {
             Should -Invoke Out-Host -ModuleName PSTaskFramework -Times 1
         }
     }
+
+    Describe 'Get-TaskFrameworkHelp' {
+        BeforeAll {
+            # Minimal build script with the parameters Get-TaskFrameworkHelp needs to merge help from.
+            $script:buildScript = Join-Path $TestDrive 'build.ps1'
+            Set-Content -Path $script:buildScript -Value @'
+<#
+.DESCRIPTION
+    A test build script.
+#>
+[CmdletBinding(PositionalBinding = $false)]
+param (
+    # The name of the task(s) to execute.
+    [Parameter(Position = 0)]
+    [string[]] $TaskName,
+    # Task-specific arguments.
+    [Parameter(ValueFromRemainingArguments)]
+    [object[]] $TaskArgs
+)
+'@
+        }
+
+        It 'returns build script help when no TaskName is specified' {
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript
+
+            $output | Should -Not -BeNullOrEmpty
+            $output | Should -Match 'A test build script\.'
+        }
+
+        It 'throws when TaskName refers to a nonexistent task' {
+            { Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'nonexistent' } |
+            Should -Throw "Task 'nonexistent' not found."
+        }
+
+        It 'uses TASK NAME heading instead of NAME for a task' {
+            Task 'mytask' { param() }
+
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'mytask'
+
+            $output | Should -Match '(?m)^TASK NAME'
+            $output | Should -Not -Match '(?m)^NAME$'
+        }
+
+        It 'includes the action comment-based description in the output' {
+            Task 'described' {
+                <#
+                .DESCRIPTION
+                    A very descriptive task.
+                #>
+                param()
+            }
+
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'described'
+
+            $output | Should -Match 'A very descriptive task'
+        }
+
+        It 'shows no dependencies in DEPENDS ON when task has none' {
+            Task 'nodeps' { param() }
+
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'nodeps'
+
+            $output | Should -Match '(?m)^DEPENDS ON'
+            $output | Should -Match 'This task has no task dependencies\.'
+        }
+
+        It 'lists dependencies in DEPENDS ON when task has DependsOn' {
+            Task 'prereq' { param() }
+            Task 'withdeps' { param() } -DependsOn @('prereq')
+
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'withdeps'
+
+            $output | Should -Match '(?m)^DEPENDS ON'
+            $output | Should -Match 'This task depends on the following tasks'
+            $output | Should -Match '\- prereq'
+        }
+
+        It 'generates help for a meta-task with null action' {
+            Task 'meta' $null -Description 'A grouping task'
+
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'meta'
+
+            $output | Should -Match '(?m)^TASK NAME'
+            $output | Should -Match 'A grouping task'
+        }
+
+        It 'includes the build script path in the syntax section' {
+            Task 'mytask2' { param() }
+
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'mytask2'
+
+            $output | Should -Match ([regex]::Escape($script:buildScript))
+        }
+
+        It 'respects custom HelpTaskName in the remarks section' {
+            Task 'sometask' {
+                <#
+                .DESCRIPTION
+                    A task with a description.
+                #>
+                param()
+            }
+
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'sometask' -HelpTaskName 'usage'
+
+            $output | Should -Match ([regex]::Escape("$($script:buildScript) usage sometask"))
+        }
+    }
 }
