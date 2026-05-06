@@ -17,9 +17,14 @@
 
     Lists all available tasks.
 .EXAMPLE
-    PS> ./build.ps1 test -noDeps
+    PS> ./build.ps1 clean -noDeps
 
-    Executes the 'test' task without executing its dependencies.
+    Executes the 'clean' task without executing its dependencies.
+.EXAMPLE
+    PS> ./build.ps1 help clean -full
+
+    Displays the help documentation for the 'clean' task.
+    Run `./build.ps1 help help -full` for more information on the help system.
 .NOTES
     SPDX-License-Identifier: Unlicense
     Source: http://github.com/mrfootoyou/pstaskframework
