@@ -228,167 +228,6 @@ function Get-TaskFrameworkTasks {
     return [TaskDefinition]::GetOrderedTasks().Values
 }
 
-function Repair-TaskStackTrace {
-    <#
-    .DESCRIPTION
-        Fixes the stack trace of an error that occurs when invoking a task using
-        Invoke-Expression.
-
-        The invocation looks like this:
-            Invoke-Expression -Command "&{`n<task action body>`n} <task args>"
-
-        The call stack will look something like this:
-            ...
-            at <ScriptBlock>, <No file>: line 5
-            at <ScriptBlock>, <No file>: line 1
-            at Invoke-Task, F:\repo\scripts\task-framework.psm1: line 264
-            at Invoke-TaskFramework, F:\repo\scripts\task-framework.psm1: line 346
-            at <ScriptBlock>, F:\repo\build.ps1: line 198
-            at <ScriptBlock>, <No file>: line 1
-
-        The "<No file>" stack frames above "Invoke-Task" are from Invoke-Expression.
-        The frame at line 1 is the script block invocation (&{...}) used to pass
-        parameters into the task action. This should be ignored since it would not
-        appear in a normal stack trace.
-        The next one (at line 5) is an actual task frame. We will replace it
-        with the filename and line number of the task action.
-    #>
-    param(
-        [System.Management.Automation.ErrorRecord]$ErrorRecord,
-        [TaskDefinition]$Task,
-        # The line where the task action starts within the Invoke-Expression command.
-        [int]$TaskActionStartLine = 2
-    )
-
-    # Unfortunately, we have to use reflection to set the 'StackTrace'. This may
-    # break in future versions of PowerShell so we proceed with caution.
-    # See https://github.com/PowerShell/PowerShell for the ErrorRecord definition.
-    $bindingFlags = [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
-    $field = $ErrorRecord.GetType().GetField("_scriptStackTrace", $bindingFlags)
-    if (!$field) {
-        Write-Verbose "Unable to fix task stacktrace: could not find '_scriptStackTrace' field via reflection."
-        return
-    }
-
-    $taskFile = $Task.Action.Ast.Extent.File ?? '<No file>'
-    $taskLineNumber = $Task.Action.Ast.Extent.StartLineNumber
-
-    # split and reverse the stack frames to simplify things
-    $frames = $ErrorRecord.ScriptStackTrace -split '\r?\n'
-    [array]::Reverse($frames)
-
-    # use a state machine to rewrite the frames. Remember we reversed the frames so we're going bottom-up.
-    $state = 'beforeInvokeTaskFrame'
-    $fixedFrames = foreach ($frame in $frames) {
-        switch ($state) {
-            'beforeInvokeTaskFrame' {
-                $frame
-                if ($frame.StartsWith('at Invoke-Task,')) { $state = 'afterInvokeTaskFrame' }
-            }
-            'afterInvokeTaskFrame' {
-                # ignore frame at line 1
-                if ($frame -eq 'at <ScriptBlock>, <No file>: line 1') {
-                    $state = 'afterFrameAtLine1'
-                }
-                else {
-                    # should not happen
-                    $frame
-                    $state = 'beforeInvokeTaskFrame'
-                }
-            }
-            'afterFrameAtLine1' {
-                if ($frame -match '^at <ScriptBlock>, <No file>: line (\d+)') {
-                    "at <ScriptBlock>, ${taskFile}: line $($taskLineNumber + $Matches[1] - $TaskActionStartLine)"
-                }
-                else { $frame; $state = 'afterInvokeExpression'; }
-            }
-            'afterInvokeExpression' { $frame }
-        }
-    }
-
-    [array]::Reverse($fixedFrames)
-    $fixedStackTrace = $fixedFrames -join [System.Environment]::NewLine
-    $field.SetValue($ErrorRecord, $fixedStackTrace)
-}
-
-function Invoke-Task {
-    <#
-    .DESCRIPTION
-        Invokes a task defined in the task framework.
-
-        This is typically not called directly; use Invoke-TaskFramework instead.
-
-        The function will import the specified scripts and variables into the scope
-        of the invoked task, allowing them to be used in the task action. Mutable variables,
-        such as HashTables or lists, can be used to share state across tasks, but be cautious
-        of potential side effects.
-    #>
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingInvokeExpression', '', Justification = 'Using Invoke-Expression is necessary to allow task actions to accept named arguments.')]
-    param(
-        [TaskDefinition]$Task,
-        [object[]]$TaskArgs,
-        [hashtable]$Variables,
-        [string[]]$ImportScripts
-    )
-
-    if ($null -eq $Task.Action) {
-        Write-Verbose "Skipping task '$($Task.Name)' since it has no action."
-        return
-    }
-
-    Import-Module PSArgs -Verbose:$false
-    Import-Module Secrets -Verbose:$false
-    Import-Module BuildHelpers -Verbose:$false
-
-    $ImportScripts.foreach{
-        Write-Verbose "Importing script '$_'."
-        if ($_ -like '*.ps1') {
-            . $_
-        }
-        else {
-            Import-Module $_ -Verbose:$false
-        }
-    }
-
-    $Variables.Keys.foreach{
-        Write-Verbose "Importing variable '$_' with value $(ConvertTo-PSString $Variables[$_] -UseQuotes)."
-        Set-Variable -Name $_ -Value $Variables[$_] -Force -ea Ignore
-    }
-
-    $TaskName = $Task.Name
-
-    $private:_taskCommandArgs = ConvertTo-CommandArg $TaskArgs
-    if ($_taskCommandArgs) {
-        Write-Verbose "Invoking task '$TaskName' with arguments: $_taskCommandArgs"
-    }
-    else {
-        Write-Verbose "Invoking task '$TaskName' with no arguments."
-    }
-
-    $global:LASTEXITCODE = 0
-
-    try {
-        # Use Invoke-Expression to invoke the script block with arguments. This enables
-        # $TaskArgs to contain named parameters (i.e. '-foo','bar') not just positional
-        # parameters ('bar').
-        Invoke-Expression -Command "&{`n$($Task.Action)`n} $_taskCommandArgs"
-    }
-    catch {
-        # Since we used Invoke-Expression to execute the task's action, the stack trace will
-        # not contain the action's actual filename and line number. Let's fixup the stack
-        # trace to include the task action's filename and line number...
-        Repair-TaskStackTrace -ErrorRecord $_ -Task $Task -TaskActionStartLine 2
-        throw $_
-    }
-
-    if ($Task.AllowedExitCodes.Count -gt 0 -and $global:LASTEXITCODE -notin $Task.AllowedExitCodes) {
-        Write-Verbose "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
-        throw "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
-    }
-    Write-Verbose "Completed task '$TaskName' with exit code $global:LASTEXITCODE."
-    $global:LASTEXITCODE = 0 # reset to avoid affecting the final exit code
-}
-
 function Add-TaskFrameworkDefaultTasks {
     <#
     .DESCRIPTION
@@ -725,6 +564,167 @@ function Get-TaskFrameworkHelp {
     $text = $text -creplace "Get-Help $(escapeRegex $TaskName) ", "$(escapeReplacement "$BuildScriptPath $HelpTaskName $TaskName") -- "
 
     return finalizeText $text
+}
+
+function Repair-TaskStackTrace {
+    <#
+    .DESCRIPTION
+        Fixes the stack trace of an error that occurs when invoking a task using
+        Invoke-Expression.
+
+        The invocation looks like this:
+            Invoke-Expression -Command "&{`n<task action body>`n} <task args>"
+
+        The call stack will look something like this:
+            ...
+            at <ScriptBlock>, <No file>: line 5
+            at <ScriptBlock>, <No file>: line 1
+            at Invoke-Task, F:\repo\scripts\task-framework.psm1: line 264
+            at Invoke-TaskFramework, F:\repo\scripts\task-framework.psm1: line 346
+            at <ScriptBlock>, F:\repo\build.ps1: line 198
+            at <ScriptBlock>, <No file>: line 1
+
+        The "<No file>" stack frames above "Invoke-Task" are from Invoke-Expression.
+        The frame at line 1 is the script block invocation (&{...}) used to pass
+        parameters into the task action. This should be ignored since it would not
+        appear in a normal stack trace.
+        The next one (at line 5) is an actual task frame. We will replace it
+        with the filename and line number of the task action.
+    #>
+    param(
+        [System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [TaskDefinition]$Task,
+        # The line where the task action starts within the Invoke-Expression command.
+        [int]$TaskActionStartLine = 2
+    )
+
+    # Unfortunately, we have to use reflection to set the 'StackTrace'. This may
+    # break in future versions of PowerShell so we proceed with caution.
+    # See https://github.com/PowerShell/PowerShell for the ErrorRecord definition.
+    $bindingFlags = [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
+    $field = $ErrorRecord.GetType().GetField("_scriptStackTrace", $bindingFlags)
+    if (!$field) {
+        Write-Verbose "Unable to fix task stacktrace: could not find '_scriptStackTrace' field via reflection."
+        return
+    }
+
+    $taskFile = $Task.Action.Ast.Extent.File ?? '<No file>'
+    $taskLineNumber = $Task.Action.Ast.Extent.StartLineNumber
+
+    # split and reverse the stack frames to simplify things
+    $frames = $ErrorRecord.ScriptStackTrace -split '\r?\n'
+    [array]::Reverse($frames)
+
+    # use a state machine to rewrite the frames. Remember we reversed the frames so we're going bottom-up.
+    $state = 'beforeInvokeTaskFrame'
+    $fixedFrames = foreach ($frame in $frames) {
+        switch ($state) {
+            'beforeInvokeTaskFrame' {
+                $frame
+                if ($frame.StartsWith('at Invoke-Task,')) { $state = 'afterInvokeTaskFrame' }
+            }
+            'afterInvokeTaskFrame' {
+                # ignore frame at line 1
+                if ($frame -eq 'at <ScriptBlock>, <No file>: line 1') {
+                    $state = 'afterFrameAtLine1'
+                }
+                else {
+                    # should not happen
+                    $frame
+                    $state = 'beforeInvokeTaskFrame'
+                }
+            }
+            'afterFrameAtLine1' {
+                if ($frame -match '^at <ScriptBlock>, <No file>: line (\d+)') {
+                    "at <ScriptBlock>, ${taskFile}: line $($taskLineNumber + $Matches[1] - $TaskActionStartLine)"
+                }
+                else { $frame; $state = 'afterInvokeExpression'; }
+            }
+            'afterInvokeExpression' { $frame }
+        }
+    }
+
+    [array]::Reverse($fixedFrames)
+    $fixedStackTrace = $fixedFrames -join [System.Environment]::NewLine
+    $field.SetValue($ErrorRecord, $fixedStackTrace)
+}
+
+function Invoke-Task {
+    <#
+    .DESCRIPTION
+        Invokes a task defined in the task framework.
+
+        This is typically not called directly; use Invoke-TaskFramework instead.
+
+        The function will import the specified scripts and variables into the scope
+        of the invoked task, allowing them to be used in the task action. Mutable variables,
+        such as HashTables or lists, can be used to share state across tasks, but be cautious
+        of potential side effects.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingInvokeExpression', '', Justification = 'Using Invoke-Expression is necessary to allow task actions to accept named arguments.')]
+    param(
+        [TaskDefinition]$Task,
+        [object[]]$TaskArgs,
+        [hashtable]$Variables,
+        [string[]]$ImportScripts
+    )
+
+    if ($null -eq $Task.Action) {
+        Write-Verbose "Skipping task '$($Task.Name)' since it has no action."
+        return
+    }
+
+    Import-Module PSArgs -Verbose:$false
+    Import-Module Secrets -Verbose:$false
+    Import-Module BuildHelpers -Verbose:$false
+
+    $ImportScripts.foreach{
+        Write-Verbose "Importing script '$_'."
+        if ($_ -like '*.ps1') {
+            . $_
+        }
+        else {
+            Import-Module $_ -Verbose:$false
+        }
+    }
+
+    $Variables.Keys.foreach{
+        Write-Verbose "Importing variable '$_' with value $(ConvertTo-PSString $Variables[$_] -UseQuotes)."
+        Set-Variable -Name $_ -Value $Variables[$_] -Force -ea Ignore
+    }
+
+    $TaskName = $Task.Name
+
+    $private:_taskCommandArgs = ConvertTo-CommandArg $TaskArgs
+    if ($_taskCommandArgs) {
+        Write-Verbose "Invoking task '$TaskName' with arguments: $_taskCommandArgs"
+    }
+    else {
+        Write-Verbose "Invoking task '$TaskName' with no arguments."
+    }
+
+    $global:LASTEXITCODE = 0
+
+    try {
+        # Use Invoke-Expression to invoke the script block with arguments. This enables
+        # $TaskArgs to contain named parameters (i.e. '-foo','bar') not just positional
+        # parameters ('bar').
+        Invoke-Expression -Command "&{`n$($Task.Action)`n} $_taskCommandArgs"
+    }
+    catch {
+        # Since we used Invoke-Expression to execute the task's action, the stack trace will
+        # not contain the action's actual filename and line number. Let's fixup the stack
+        # trace to include the task action's filename and line number...
+        Repair-TaskStackTrace -ErrorRecord $_ -Task $Task -TaskActionStartLine 2
+        throw $_
+    }
+
+    if ($Task.AllowedExitCodes.Count -gt 0 -and $global:LASTEXITCODE -notin $Task.AllowedExitCodes) {
+        Write-Verbose "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
+        throw "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
+    }
+    Write-Verbose "Completed task '$TaskName' with exit code $global:LASTEXITCODE."
+    $global:LASTEXITCODE = 0 # reset to avoid affecting the final exit code
 }
 
 function Invoke-TaskFramework {
