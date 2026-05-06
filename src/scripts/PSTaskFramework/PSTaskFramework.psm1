@@ -35,6 +35,17 @@ class TaskDefinition {
         [TaskDefinition]::TasksSorted = $false
     }
 
+    static [TaskDefinition] TryGetTask([string]$taskName) {
+        if (-not [TaskDefinition]::AllTasks.Contains($taskName)) {
+            return $null
+        }
+        return [TaskDefinition]::AllTasks[$taskName]
+    }
+
+    static [TaskDefinition] GetTask([string]$taskName) {
+        return [TaskDefinition]::TryGetTask($taskName) ?? (throw "Task '$taskName' not found.")
+    }
+
     # Returns an ordered array of TaskDefinition objects corresponding to the specified task
     # names and their dependencies (if $includeDependencies is specified). The tasks are returned
     # in dependency order. For example, if taskA depends on taskB, then GetOrderedTasks('taskA', $true)
@@ -96,7 +107,7 @@ class TaskDefinition {
             }
             $visited[$task.Name] = 'visiting'
             foreach ($dep in $task.DependsOn) {
-                $depTask = [TaskDefinition]::AllTasks[$dep]
+                $depTask = [TaskDefinition]::TryGetTask($dep)
                 if (-not $depTask) {
                     throw "Dependency '$dep' of task '$($task.Name)' not found."
                 }
