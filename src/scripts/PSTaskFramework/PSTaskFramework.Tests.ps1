@@ -275,4 +275,68 @@ function Get-Message {
             $trace | Should -Be $fakeStack
         }
     }
+
+    Describe 'Add-TaskFrameworkDefaultTasks' {
+        It 'adds list and help tasks by default' {
+            Add-TaskFrameworkDefaultTasks
+
+            $tasks = Get-TaskFrameworkTasks
+            $tasks.Name | Should -Contain 'list'
+            $tasks.Name | Should -Contain 'help'
+        }
+
+        It 'adds only list when -Include list' {
+            Add-TaskFrameworkDefaultTasks -Include 'list'
+
+            $tasks = Get-TaskFrameworkTasks
+            $tasks.Name | Should -Contain 'list'
+            $tasks.Name | Should -Not -Contain 'help'
+        }
+
+        It 'adds only help when -Include help' {
+            Add-TaskFrameworkDefaultTasks -Include 'help'
+
+            $tasks = Get-TaskFrameworkTasks
+            $tasks.Name | Should -Contain 'help'
+            $tasks.Name | Should -Not -Contain 'list'
+        }
+
+        It 'uses NameMap to rename list task' {
+            Add-TaskFrameworkDefaultTasks -Include 'list' -NameMap @{ list = 'tasks' }
+
+            $tasks = Get-TaskFrameworkTasks
+            $tasks.Name | Should -Contain 'tasks'
+            $tasks.Name | Should -Not -Contain 'list'
+        }
+
+        It 'uses NameMap to rename help task' {
+            Add-TaskFrameworkDefaultTasks -Include 'help' -NameMap @{ help = 'usage' }
+
+            $tasks = Get-TaskFrameworkTasks
+            $tasks.Name | Should -Contain 'usage'
+            $tasks.Name | Should -Not -Contain 'help'
+        }
+
+        It 'skips default task if a task with that name already exists' {
+            Task 'list' { 'custom list' }
+            $countBefore = @(Get-TaskFrameworkTasks).Count
+
+            Add-TaskFrameworkDefaultTasks -Include 'list'
+
+            $tasks = Get-TaskFrameworkTasks
+            @($tasks).Count | Should -Be $countBefore
+            $tasks.Name | Should -Contain 'list'
+        }
+
+        It 'list task outputs task table when invoked' {
+            Task 'sample' -Description 'a sample task' {}
+            Add-TaskFrameworkDefaultTasks -Include 'list'
+
+            Mock Out-Host -ModuleName PSTaskFramework {}
+
+            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'list' -SkipDependencies
+
+            Should -Invoke Out-Host -ModuleName PSTaskFramework -Times 1
+        }
+    }
 }
