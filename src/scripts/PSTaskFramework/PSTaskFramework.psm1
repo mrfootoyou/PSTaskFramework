@@ -386,6 +386,108 @@ function Invoke-Task {
     $global:LASTEXITCODE = 0 # reset to avoid affecting the final exit code
 }
 
+function Add-TaskFrameworkDefaultTasks {
+    <#
+    .DESCRIPTION
+        Adds default tasks to the task framework, such as 'list' and 'help'.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '')]
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingEmptyCatchBlock', '')]
+    param(
+        # The tasks to include.
+        [ValidateSet('help', 'list')]
+        [string[]] $Include = @('help', 'list'),
+
+        # A hashtable specifying custom names for the default tasks.
+        [hashtable] $NameMap = @{}
+    )
+    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync WarningAction, Verbose
+
+    switch ($Include.where{ ![TaskDefinition]::TryGetTask($_) }) {
+        'null' {
+            $name = $NameMap[$_] ?? $_
+            Write-Verbose "Including default 'null' task as '$name'."
+            addTask $name -Description 'An empty task that does nothing.'
+        }
+        'list' {
+            $name = $NameMap[$_] ?? $_
+            Write-Verbose "Including default 'list' task as '$name'."
+            addTask $name -Description 'List all defined tasks' {
+                <#
+                .DESCRIPTION
+                    Lists all tasks defined in the task framework along with their descriptions
+                    and dependencies.
+                #>
+                Get-TaskFrameworkTasks |
+                Format-Table Name, Description, DependsOn -AutoSize |
+                Out-Host
+            }
+        }
+        'help' {
+            $name = $NameMap[$_] ?? $_
+            Write-Verbose "Including default 'help' task as '$name'."
+            addTask $name -Description 'Show detailed help for a task' {
+                <#
+                .DESCRIPTION
+                    Generates help for a task defined in the task framework. If a task name is not
+                    specified, it generates help for the build script itself.
+                .EXAMPLE
+                    PS> .\build.ps1 help
+
+                    Shows help for the build script.
+                .EXAMPLE
+                    PS> .\build.ps1 help test -full
+
+                    Shows detailed help for the 'test' task, including its description, parameters,
+                    usage, dependencies, and examples.
+                .EXAMPLE
+                    PS> .\build.ps1 help test -examples
+
+                    Shows the 'test' task examples.
+                #>
+                [CmdletBinding(PositionalBinding = $false)]
+                param(
+                    # The name of the task to show help for. If not specified, shows help for the build script itself.
+                    [Parameter(Position = 0)]
+                    [string]$TaskName,
+
+                    # Displays the entire help article for a cmdlet. Full includes parameter descriptions and attributes,
+                    # examples, input and output object types, and additional notes.
+                    [Parameter(ParameterSetName = 'Full')]
+                    [switch]$Full,
+
+                    # Adds parameter descriptions and examples to the basic help display.
+                    [Parameter(ParameterSetName = 'Detailed', Mandatory)]
+                    [switch]$Detailed,
+
+                    # Displays only the name, synopsis, and examples.
+                    [Parameter(ParameterSetName = 'Examples', Mandatory)]
+                    [switch]$Examples
+                )
+
+                $getHelpArgs = @{} + $PSBoundParameters
+                $getHelpArgs.Remove('TaskName') | Out-Null
+
+                $getTaskHelpArgs = @{
+                    GetHelpArgs     = $getHelpArgs
+                    HelpTaskName    = $Task.Name # this task's name
+                    BuildScriptPath = $BuildInvocation.MyCommand.Path ?? './build.ps1'
+                    TaskNameArgName = $TaskNameArgName ?? 'TaskName'
+                    TaskArgsArgName = $TaskArgsArgName ?? 'TaskArgs'
+                }
+                if ($TaskName) {
+                    $getTaskHelpArgs.TaskName = $TaskName
+                }
+
+                Get-TaskFrameworkHelp @getTaskHelpArgs | Out-Host
+            }
+        }
+        default {
+            Write-Warning "Unknown default task requested: '$_'."
+        }
+    }
+}
+
 function Get-TaskFrameworkHelp {
     <#
     .DESCRIPTION
@@ -730,6 +832,7 @@ $exportModuleMemberParams = @{
         'Get-TaskFrameworkTasks'
         'Invoke-TaskFramework'
         'Get-TaskFrameworkHelp'
+        'Add-TaskFrameworkDefaultTasks'
     )
 }
 

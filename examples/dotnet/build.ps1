@@ -33,6 +33,7 @@ param (
     [Parameter(Position = 0)]
     [ValidateSet(
         'list',
+        'help',
         'bootstrap',
         'version',
         'updateTools',
@@ -105,10 +106,11 @@ $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 # - $TasksToExecute: The ordered list of all tasks to execute.
 # - $Variables: The dictionary of variables to import into each task's scope.
 $Variables = @{
-    RepoRoot      = $RepoRoot
-    ScriptsDir    = $ScriptsDir
-    Configuration = $Configuration
-    Version       = $Version
+    RepoRoot        = $RepoRoot
+    ScriptsDir      = $ScriptsDir
+    BuildInvocation = $MyInvocation
+    Configuration   = $Configuration
+    Version         = $Version
     # Add more variables here as needed
 }
 
@@ -122,10 +124,7 @@ $ImportScripts = @(
 ####################################################################################
 Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
 Reset-TaskFramework
-
-Task list -desc 'List all tasks' {
-    Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
-}
+Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
     <#

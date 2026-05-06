@@ -33,6 +33,7 @@ param (
     [Parameter(Position = 0)]
     [ValidateSet(
         'list',
+        'help',
         'bootstrap',
         'version',
         'clean',
@@ -92,6 +93,7 @@ $PSModuleVersions = @{
 $Variables = @{
     RepoRoot         = $RepoRoot
     ScriptsDir       = $ScriptsDir
+    BuildInvocation  = $MyInvocation
     PSModuleVersions = $PSModuleVersions
     # Add more variables here as needed
 }
@@ -106,10 +108,7 @@ $ImportScripts = @(
 ####################################################################################
 Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
 Reset-TaskFramework
-
-Task list -desc 'List all tasks' {
-    Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
-}
+Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
     <#
