@@ -144,6 +144,35 @@ function Reset-TaskFramework {
     [TaskDefinition]::Clear()
 }
 
+function addTask {
+    <#
+    .DESCRIPTION
+        Private implementation of the `Task` function that adds a task to the task framework.
+        This is separated from the public Task function to allow for easier error handling and
+        to avoid syncing caller preferences multiple times when adding multiple tasks.
+    #>
+    [CmdletBinding()]
+    param (
+        [string]$Name,
+        [ScriptBlock]$Action,
+        [string]$Description,
+        [string[]]$DependsOn = @(),
+        [int[]]$AllowedExitCodes = @(0)
+    )
+    try {
+        [TaskDefinition]::AddTask(@{
+                Name             = $Name
+                Description      = $Description
+                DependsOn        = $DependsOn
+                Action           = $Action
+                AllowedExitCodes = $AllowedExitCodes
+            })
+    }
+    catch {
+        Write-Error -Exception $_.Exception -CategoryActivity 'Add task' -Category ResourceExists -TargetObject $Name
+    }
+}
+
 function Task {
     <#
     .DESCRIPTION
@@ -174,13 +203,8 @@ function Task {
         # empty array to ignore the exit code. Defaults to 0.
         [int[]]$AllowedExitCodes = @(0)
     )
-    [TaskDefinition]::AddTask(@{
-            Name             = $Name
-            Description      = $Description
-            DependsOn        = $DependsOn
-            Action           = $Action
-            AllowedExitCodes = $AllowedExitCodes
-        })
+    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, InformationAction
+    addTask @PSBoundParameters
 }
 
 function Get-TaskFrameworkTasks {
