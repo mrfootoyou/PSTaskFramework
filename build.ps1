@@ -17,9 +17,14 @@
 
     Lists all available tasks.
 .EXAMPLE
-    PS> ./build.ps1 test -noDeps
+    PS> ./build.ps1 clean -noDeps
 
-    Executes the 'test' task without executing its dependencies.
+    Executes the 'clean' task without executing its dependencies.
+.EXAMPLE
+    PS> ./build.ps1 help clean -full
+
+    Displays the help documentation for the 'clean' task.
+    Run `./build.ps1 help help -full` for more information on the help system.
 .NOTES
     SPDX-License-Identifier: Unlicense
     Source: http://github.com/mrfootoyou/pstaskframework
@@ -42,24 +47,15 @@ param (
     )]
     [string[]] $TaskName = @('test', 'analysis'),
 
-    # Task-specific arguments for the task specified in -TaskName.
-    # Cannot be used when -TaskName contains multiple tasks.
-    # Arguments are _not_ passed to dependencies of the specified task.
-    #
-    # Tip: Use `-- ` to clearly separate build-script arguments from task arguments.
-    # Anything after the `-- ` will be passed verbatim to the invoked task.
-    # For example:
-    #   ./build.ps1 myTask -v -- -v
-    # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
-    # while the second '-v' is passed to 'myTask' as a task-specific argument.
-    [Parameter(ValueFromRemainingArguments, DontShow)]
-    [ValidateNotNull()]
-    [object[]] $TaskArgs = @(),
-
     # When specified, dependencies of the task(s) will not be executed.
     # Default is execute all dependencies (and their dependencies).
     [Alias("noDeps")]
-    [switch] $SkipDependencies
+    [switch] $SkipDependencies,
+
+    # Receives task-specific arguments for the _single task_ specified in -TaskName.
+    [Parameter(ValueFromRemainingArguments, DontShow)]
+    [ValidateNotNull()]
+    [object[]] $TaskArgs = @()
 )
 $ErrorActionPreference = 'Stop'
 $InformationPreference = 'Continue'
@@ -76,34 +72,6 @@ $PSModuleVersions = @{
 }
 
 ####################################################################################
-# Define tasks variables
-####################################################################################
-# The properties of the $Variables dictionary will be imported as variables
-# into each task prior to execution. This allows you to define common variables that
-# are shared across all tasks, such as the repository root, scripts directory, or any
-# other values that tasks may need, such as input parameters like $Configuration.
-#
-# The following variables are always available:
-# - $Task: The currently executing task definition.
-# - $TaskName: The name of the currently executing task (same as $Task.Name).
-# - $TaskArgs: An array of the arguments passed to the currently executing task.
-# - $SkipDependencies: Indicates if the task's dependencies were executed.
-# - $TasksToExecute: The ordered list of all tasks to execute.
-# - $Variables: The dictionary of variables to import into each task's scope.
-$Variables = @{
-    RepoRoot         = $RepoRoot
-    ScriptsDir       = $ScriptsDir
-    BuildInvocation  = $MyInvocation
-    PSModuleVersions = $PSModuleVersions
-    # Add more variables here as needed
-}
-
-# These scripts will be imported into each task prior to execution.
-$ImportScripts = @(
-    # Add more scripts here as needed
-)
-
-####################################################################################
 # Define all tasks
 ####################################################################################
 Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
@@ -116,7 +84,7 @@ Task bootstrap -desc 'Installs required tools' {
         Bootstraps the repository by installing required tools.
 
         Required tools include:
-        - Git (probably already installed, but we'll update if necessary).
+        - Git (probably already installed).
         - PowerShell 7.4 or later (assumed to be already be installed).
         - Pester
         - PSScriptAnalyzer
@@ -246,6 +214,7 @@ Task test -desc 'Execute tests' -dependsOn version {
         Export-ModuleMember -Function Invoke-Pester
     }
 
+    Import-Module PSArgs -Verbose:$false
     Write-Host "$($PSStyle.Dim)>> Invoke-Pester -Configuration $(ConvertTo-PSString $configuration)"
     & $tempModule Invoke-Pester -Configuration $configuration
 
@@ -343,11 +312,12 @@ Task analysis -desc 'Execute analysis' -dependsOn version {
 # the documentation for Invoke-TaskFramework for more details.
 ##############################################################
 
+$TaskContext = @{ } # contains info about the current task during execution.
 Invoke-TaskFramework `
     -TaskName $TaskName `
     -TaskArgs $TaskArgs `
     -SkipDependencies:$SkipDependencies `
     -WorkingDirectory $RepoRoot `
-    -Variables $Variables `
-    -ImportScripts $ImportScripts `
+    -BuildScriptPath $MyInvocation.MyCommand.Path `
+    -TaskContext $TaskContext `
     -ExitOnError

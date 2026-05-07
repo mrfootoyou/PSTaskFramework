@@ -30,7 +30,7 @@
     Source: http://github.com/mrfootoyou/pstaskframework
 #>
 #Requires -Version 7.4
-# spell:ignore winget,choco
+# spell:ignore dont,winget,choco
 
 [CmdletBinding(PositionalBinding = $false)]
 param (
@@ -51,24 +51,15 @@ param (
     [ValidateSet('debug', 'release')]
     [string] $Configuration = 'debug',
 
-    # Task-specific arguments for the task specified in -TaskName.
-    # Cannot be used when -TaskName contains multiple tasks.
-    # Arguments are _not_ passed to dependencies of the specified task.
-    #
-    # Tip: Use `-- ` to clearly separate build-script arguments from task arguments.
-    # Anything after the `-- ` will be passed verbatim to the invoked task.
-    # For example:
-    #   ./build.ps1 myTask -v -- -v
-    # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
-    # while the second '-v' is passed to 'myTask' as a task-specific argument.
-    [Parameter(ValueFromRemainingArguments)]
-    [ValidateNotNull()]
-    [object[]] $TaskArgs = @(),
-
     # When specified, dependencies of the task(s) will not be executed.
     # Default is execute all dependencies (and their dependencies).
     [Alias("noDeps")]
-    [switch] $SkipDependencies
+    [switch] $SkipDependencies,
+
+    # Receives task-specific arguments for the _single task_ specified in -TaskName.
+    [Parameter(ValueFromRemainingArguments, DontShow)]
+    [ValidateNotNull()]
+    [object[]] $TaskArgs = @()
 )
 $ErrorActionPreference = 'Stop'
 $InformationPreference = 'Continue'
@@ -79,33 +70,8 @@ $InformationPreference = 'Continue'
 $RepoRoot = $PSScriptRoot
 $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
-####################################################################################
-# Define tasks variables
-####################################################################################
-# The properties of the $Variables dictionary will be imported as variables
-# into each task prior to execution. This allows you to define common variables that
-# are shared across all tasks, such as the repository root, scripts directory, or any
-# other values that tasks may need, such as input parameters like $Configuration.
-#
-# The following variables are always available:
-# - $Task: The currently executing task definition.
-# - $TaskName: The name of the currently executing task (same as $Task.Name).
-# - $TaskArgs: An array of the arguments passed to the currently executing task.
-# - $SkipDependencies: Indicates if the task's dependencies were executed.
-# - $TasksToExecute: The ordered list of all tasks to execute.
-# - $Variables: The dictionary of variables to import into each task's scope.
-$Variables = @{
-    RepoRoot        = $RepoRoot
-    ScriptsDir      = $ScriptsDir
-    BuildInvocation = $MyInvocation
-    Configuration   = $Configuration
-    # Add more variables here as needed
-}
-
-# These scripts will be imported into each task prior to execution.
-$ImportScripts = @(
-    # Add more scripts here as needed
-)
+# Trick to suppress "parameter is never used" warning on params that are only used in tasks.
+$null = $Configuration
 
 ####################################################################################
 # Define all tasks
@@ -172,7 +138,7 @@ Task clean -desc 'Clean the repository' -DependsOn version {
 }
 
 Task build -desc 'Build the project' -dependsOn version {
-    Write-Host 'TODO: Implement build logic.'
+    Write-Host "TODO: Implement $Configuration build logic."
 }
 
 ##############################################################
@@ -180,11 +146,12 @@ Task build -desc 'Build the project' -dependsOn version {
 # the documentation for Invoke-TaskFramework for more details.
 ##############################################################
 
+$TaskContext = @{ } # contains info about the current task during execution.
 Invoke-TaskFramework `
     -TaskName $TaskName `
     -TaskArgs $TaskArgs `
     -SkipDependencies:$SkipDependencies `
     -WorkingDirectory $RepoRoot `
-    -Variables $Variables `
-    -ImportScripts $ImportScripts `
+    -BuildScriptPath $MyInvocation.MyCommand.Path `
+    -TaskContext $TaskContext `
     -ExitOnError

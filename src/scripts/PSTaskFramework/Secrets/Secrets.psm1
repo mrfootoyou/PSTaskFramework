@@ -169,6 +169,7 @@ function Read-Secret {
         [System.String]
         The secret value read from the console.
     #>
+    # TODO: Add a "-Secret" switch, rename to "Read-Input", and move to BuildHelpers.
     [CmdletBinding()]
     [OutputType([string])]
     param(
