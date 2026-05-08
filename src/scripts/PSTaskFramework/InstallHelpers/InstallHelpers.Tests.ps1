@@ -6,7 +6,7 @@
     Source: http://github.com/mrfootoyou/pstaskframework
 #>
 #Requires -Version 7.4
-# spell:ignore appx,winget,choco,mytool,Contoso
+# spell:ignore appx,winget,choco,mytool,Contoso,8wekyb3d8bbwe
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Mocked functions may have unused parameters.')]

@@ -1,3 +1,5 @@
+<!-- spell:ignore hashtable -->
+
 # PSTaskFramework
 
 [![pr_validation](https://github.com/mrfootoyou/PSTaskFramework/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/mrfootoyou/PSTaskFramework/actions/workflows/pr-validation.yml)
@@ -41,11 +43,11 @@ Your repo structure should look something like this:
 
 ```text
 <repo-root>/
-├─- build.ps1  <== the entrypoint
-└─- scripts/
-    └─- PSTaskFramework/  <== the framework
-        ├─- ...
-        └─- <test files can be omitted>
+├── build.ps1  <== the entrypoint
+└── scripts/
+    └── PSTaskFramework/  <== the framework
+        ├── ...
+        └── <test files can be omitted>
 ```
 
 > **NOTE:** The `PSTaskFramework` folder can be located elsewhere if desired, just update the
@@ -75,8 +77,7 @@ get a feel for how to interact with the framework. More details are available in
 
 It should come as no surprise that **tasks** are the core unit of work in the PSTaskFramework.
 Understanding how to define and execute them is key to using the framework effectively. This section
-covers the basics of task execution, how to define tasks, how to share variables between tasks, and
-how to import frequently used scripts.
+covers the basics of task execution, and how to define tasks.
 
 ### Task Execution Basics
 
@@ -85,42 +86,50 @@ dependencies. You can skip dependencies with the `-noDeps` (or `-SkipDependencie
 `./build.ps1 <taskName> -noDeps`.
 
 You can execute multiple tasks by providing multiple task names separated by commas, e.g.,
-`./build.ps1 taskA, taskB, taskC`. The framework will execute the tasks in dependency order, or if
-two tasks have no dependencies, in the order in which they were defined in the build script. You can
-also use `-noDeps` to only execute the specified tasks.
+`./build.ps1 taskA,taskB,taskC`. The framework will execute all the tasks (and their dependencies)
+in dependency order. If two tasks have no dependencies, they will be executed in the order in which
+they were defined in the build script. You can also use `-noDeps` to skip dependencies tasks.
 
-You can pass arguments to tasks using standard PowerShell syntax, with a couple caveats:
+> **Tip:** Use `./build.ps1 list` to get a list of all available tasks.
 
-1. Task arguments can only be used when invoking a _single task_. The arguments are only passed to
-   that specific task, not to its dependencies.
-2. To disambiguate framework arguments from task arguments, place a double-dash `--` before the
-   task-specific arguments. Any arguments after the double-dash will be passed to the task without
-   the framework attempting to interpret them.
+You can pass task-specific arguments using standard PowerShell syntax, with a couple caveats:
+
+1. Task-specific arguments can only be used when invoking a _single task_. The arguments are only
+   passed to that specific task, not to its dependencies.
+2. To disambiguate build script arguments from task-specific arguments, place a double-dash `--`
+   before the task-specific arguments. Any arguments after the double-dash will be passed to the
+   task without the build script attempting to interpret them.
 
    For example: `./build.ps1 myTask -v -- -v 2.0.0`.
 
    Without the `--`, PowerShell would interpret the second `-v` as a duplicate `-Verbose` argument
-   instead of a task argument.
+   instead of a task-specific argument.
+
+   > **Tip:** The `--` is only _required_ when the task-specific arguments can be confused with
+   > build script arguments. If there is no ambiguity, you can omit it.
+
+> **Tip:** Display the help documentation for a task using `./build.ps1 help <taskName>`. This will
+> show the task's description, syntax, and dependencies. Use `./build.ps1 help help -full` for more
+> information on the help task.
 
 ### Defining Tasks
 
-Tasks are basically just named script blocks that can be invoked from the command line, similar to
-functions. Like functions they can accept parameters and arguments. Unlike functions, however, they
-can declare dependencies on other tasks.
+Tasks are basically glorified PowerShell functions - they have a name, an executable script block,
+optional parameters, and inline-documentation. Tasks can also declare dependencies on other tasks.
 
 Tasks are created and registered with the `Task` command:
 
-```powershell
-Task <taskName> [-desc <description>] [-dependsOn <dependency1,dependency2,...>] {
+```text
+Task <taskName> [-Description <description>] [-DependsOn <dependency1,dependency2,...>] [-AllowedExitCodes <code1,code2,...>] [-Action] {
     # Task implementation goes here
 }
 ```
 
-The following example defines a `build` task that accepts an optional `Version` parameter. It
-depends on the `restore` task:
+The following example defines two tasks: `restore` and `build`. The `build` task has a dependency on
+`restore` and accepts an optional task-specific `Version` parameter:
 
 ```powershell
-Task restore -desc 'Restores packages' -dependsOn version {
+Task restore -desc 'Restores packages' {
     <#
     .DESCRIPTION
         Restores package dependencies using...
@@ -128,7 +137,7 @@ Task restore -desc 'Restores packages' -dependsOn version {
     # TODO: Implement restore logic
 }
 
-Task build -desc 'Builds the solution' -DependsOn restore {
+Task build -desc 'Builds the solution' -dependsOn restore {
     <#
     .DESCRIPTION
         Builds the solution using...
@@ -141,132 +150,129 @@ Task build -desc 'Builds the solution' -DependsOn restore {
 }
 ```
 
-The `build` task can be invoked using `./build.ps1 build`. The PSTaskFramework will execute the
-`version`, `restore`, and `build` tasks, in that order. You can specify the Version argument using
-`./build.ps1 build -- -Version 2.0.0` or, in this example, `./build.ps1 build 2.0.0`.
+The `build` task can be invoked using `./build.ps1 build`. The PSTaskFramework will execute both the
+`restore` and `build` tasks, in that order. You can specify the Version argument using
+`./build.ps1 build -- -Version 2.0.0`.
 
 **Notes:**
 
 - Every task must have a **unique** name.
-- Task names are _not_ case-sensitive: `build` and `Build` refer to the same task and can be used
-  interchangeably.
-- Public tasks should be added to the `TaskName` parameters list of valid values (toward the top of
-  the build.ps1 file).
+  - Task names are _not_ case-sensitive: `build` and `Build` refer to the same task and can be used
+    interchangeably.
 - Tasks should have a short, one sentence description (`-desc`) explaining their purpose. This is
   displayed in the task listing and in the help output.
-- Tasks can depend on other tasks (`-DependsOn`), in which case the framework ensures dependencies
-  execute first.
-- Task bodies are script blocks that can contain any PowerShell code.
-- Use `param(...)` within the task body to define and document task-specific parameters.
-- Use comment-based help (`<#...#>`) above the task params to document the task. This will be
-  displayed in the help output for that task.
+- Tasks may depend on zero or more other tasks (`-dependsOn`), in which case the framework ensures
+  dependencies execute first.
+- Task actions are PowerShell script blocks.
+  - Use a `param(...)` block to define and document task-specific parameters.
+  - Use comment-based help (`<#...#>`) block to document the task. This will be displayed in the
+    help output.
+- Public tasks should be added to the `TaskName` parameter's list of valid values (toward the top of
+  the file).
 
-### Understanding Shared Task Variables
+### Task Scope
 
-Each task executes in an isolated scope. Tasks have access to all global and automatic PowerShell
-variables, any declared parameters, and all variables declared in the script's `$Variables`
-dictionary.
+Tasks execute in a _child scope_ of the script they are defined in (e.g. `build.ps1`). This means
+they have access to all script-scoped variables and functions, in addition to all global-scope
+variables and functions. However, because the tasks are running in a child scope, they cannot
+**assign** a new value to script-scoped variables unless they use the `$script:` scope modifier, for
+example `$script:MyVariable = 123`. Without the `$script:` modifier, a new variable named
+`MyVariable` would be created in the task's local scope, leaving the script-scoped variable
+unchanged. Similarly for global-scoped variables, tasks must use the `$global:` scope modifier to
+assign a new value.
 
-The `$Variables` dictionary is the intended mechanism for sharing state between tasks without
-relying on global variables. The properties of the `$Variables` dictionary will be imported as
-variables into each task prior to execution. This allows you to define common variables that are
-shared across all tasks, such as the repository root, scripts directory, or any other values that
-tasks may need, such as common input parameters like `$Configuration`.
+Note that while tasks cannot **assign** new values to script-scoped variables without the `$script:`
+modifier, they can modify the properties/elements of these variables. For example, if there is a
+script-scoped variable `$MyConfig` that is a hashtable, a task can modify its properties like this:
+`$MyConfig.Setting1 = 'NewValue'`. This will update the `Setting1` property of the `$MyConfig`
+hashtable in the script scope.
 
-Here is an example of defining common variables. In this example, `$Configuration` is an input
-parameter for the ./build.ps1 script:
+### Task Context
 
-```powershell
-$RepoRoot      = $PSScriptRoot
-$ScriptsDir    = Convert-Path "$RepoRoot/scripts"
+Tasks have access to a `$TaskContext` hashtable containing metadata about the currently executing
+task, such as its name, description, and dependencies. It also contains a list of all tasks to be
+executed in the current run, among other data. See `Invoke-TaskFramework` for exact details.
 
-$Variables = @{
-    RepoRoot        = $RepoRoot
-    ScriptsDir      = $ScriptsDir
-    BuildInvocation = $MyInvocation
-    # Make the $Configuration parameter available
-    # to all tasks
-    Configuration   = $Configuration
-    # Add more variables here as needed
-}
-```
+Tasks can also add custom properties to the `$TaskContext` hashtable, which can then be accessed by
+other tasks in the same run. This can be useful for sharing data between tasks without using
+global/script variables.
 
-Tasks can then reference these variables directly:
+### Helper Functions
 
-```powershell
-Task example {
-    Write-Host "Repo root is $RepoRoot"
-    Write-Host "Scripts directory is $ScriptsDir"
-    Write-Host "Configuration is $Configuration"
-}
-```
+The PSTaskFramework includes several useful functions to help in writing your tasks. These are
+located in submodules within the `PSTaskFramework` folder (see below for details).
 
-**Notes:**
+Within the body of a _task_, you can load these submodules using only the module's name. For
+example, `Import-Module InstallHelpers` will load the `PSTaskFramework/InstallHelpers` module.
+Outside of a task, you must specify the full path to the module folder, e.g.
+`Import-Module $ScriptsDir/PSTaskFramework/InstallHelpers`.
 
-- Each property of `$Variables` becomes a local variable in each task.
-- Changes to variables with mutable state (e.g. collections and mutable objects) will be visible to
-  subsequent tasks (so be careful).
-- The following variables are always available:
-  - `$Task`: Metadata about the currently executing task.
-  - `$TaskName`: The name of the currently executing task (same as `$Task.Name`).
-  - `$TaskArgs`: An array of the arguments passed to the currently executing task.
-  - `$SkipDependencies`: Indicates if the task's dependencies were executed.
-  - `$TasksToExecute`: The ordered list of all tasks being executed.
-  - `$Variables`: The dictionary of variables to import into each task's scope.
-- Since the `$Variables` dictionary is available to all tasks, tasks can use it to pass information
-  to subsequent tasks.
+**`PSTaskFramework/BuildHelpers`** (automatically imported):
 
-  For example, a `getNextVersion` task might calculate the next version and store it in
-  `$Variables.nextVersion`. A dependent task could then use that value:
+- `Invoke-Shell`: Invokes a shell application with arguments. Echoes the full command to the console
+  (suppress with `-InformationAction Ignore`). Reports an error if the command exits with a non-zero
+  exit code (configurable via `-ErrorAction` and `-AllowedExitCodes`).
+- `Assert-AppExists`: Checks if a specified application exists on `PATH`. Returns the full path if
+  the `-PassThru` switch is used.
+- `Test-Administrator`: Returns `$true` if the current user has administrator (Windows) or root
+  (Linux/macOS) privileges.
 
-  ```Powershell
-  Task getNextVersion {
-      # Determine next version (e.g. from git tags)
-      $Variables.nextVersion = '1.2.3'
-  }
+**`PSTaskFramework/Secrets`** (automatically imported):
 
-  Task build -DependsOn getNextVersion {
-      param(
-          $Version = $nextVersion ?? '1.0.0'
-      )
-      Invoke-Shell -- dotnet build -c $Configuration -p:Version=$Version
-  }
-  ```
+- `Push-Secret` / `Pop-Secret`: Register and unregister secret values (reference-counted) to be
+  masked from output.
+- `Protect-Secret`: Replaces all registered secrets in a string with a masked value (default
+  `****`).
+- `Read-Secret`: Reads a secret interactively without echoing it to the console. CI-aware: returns
+  an empty string (or errors) when running non-interactively.
 
-  > **Warning:** Be careful when using this pattern since it creates non-trivial coupling between
-  > tasks and can result in unexpected behavior when dependencies are skipped.
+**`PSTaskFramework/InstallHelpers`**:
 
-### Import Frequently Used Scripts
+- `Install-RequiredApp`: Installs applications using the best available package manager (winget,
+  Chocolatey, apt, dnf, Homebrew) or a custom script block. Accepts a dictionary mapping app names
+  to installation metadata.
+- `Get-WellKnownAppInfo`: Returns the built-in installation metadata for a named well-known
+  application (supports wildcards).
+- `Get-PackageManager`: Detects which supported package managers are currently installed on the
+  system.
+- `Install-PackageManager`: Installs a supported package manager (winget, Chocolatey, Homebrew,
+  etc.) if not already present.
+- `Install-PowerShellModule`: Ensures the specified PowerShell modules are installed at a minimum
+  version, installing from the PowerShell Gallery if needed.
 
-Tasks are free to import any scripts or modules needed to accomplish their work. Sometimes we have
-scripts that are used frequently by many tasks, resulting in lots of duplicate code. To avoid this,
-the PSTaskFramework will automatically import any scripts listed in the `$ImportScripts` array prior
-to task execution.
+**`PSTaskFramework/PSArgs`** (automatically imported):
 
-For example, if we have a `my-task-helpers.ps1` script we want to use in all/most tasks, then we can
-add it to the `$ImportScripts` array like this:
-
-```powershell
-$ImportScripts = @(
-    Convert-Path "$ScriptsDir\my-task-helpers.ps1"
-    # Add more scripts here as needed
-)
-```
-
-**Notes:**
-
-- `.ps1` script files will be dot-sourced (`. <path_to_script>`) just before task execution.
-- `.psm1`/`.psd1` module files will be imported using `Import-Module <path_to_module>` just before
-  task execution.
-- Tasks can load `PSTaskFramework` submodules using only the module's name. For example,
-  `Import-Module InstallHelpers` will load the `PSTaskFramework/InstallHelpers` module.
-- The following modules are automatically imported into all tasks and do not need to be explicitly
-  imported:
-  - `BuildHelpers` (functions like `Invoke-Shell`)
-  - `Secrets` (secret input and masking)
-  - `PSArgs` (argument parsing and conversion)
+- `ConvertTo-PSString`: Converts a value (string, bool, int, hashtable, collection, etc.) to a valid
+  PowerShell literal string representation.
+- `ConvertTo-CommandArg`: Converts a value to a command-line argument string, suitable for passing
+  to external applications (e.g. splatting a hashtable as `-Name:Value` pairs).
 
 ## Pitfalls and Troubleshooting
+
+### Avoid positional script parameters
+
+**Symptom:** You have defined positional parameters in your build script and now the script is
+eagerly binding to your task-specific arguments, resulting in excessive use of `--` argument
+separator.
+
+**Cause:** Positional parameters in the build script can cause PowerShell to bind task-specific
+arguments to the scripts positional parameters.
+
+**Cure:** Avoid defining positional parameters in your build script. Use
+`[CmdletBinding(PositionalBinding = $false)]` to disable positional binding. The `TaskName`
+parameter should be the only positional parameter `[Parameter(Position = 0)]`.
+
+### Script variable modification not persisting across tasks
+
+**Symptom:** You have a script-scoped variable that you are trying to modify in a task, but the
+modification does not persist after the task finishes.
+
+**Cause:** Tasks execute in a child scope of the script, so they cannot assign new values to
+script-scoped variables without using the `$script:` scope modifier.
+
+**Cure:** Use the `$script:` scope modifier when assigning a new value to a script-scoped variable
+within a task. For example, `$script:MyVariable = 123`. This will ensure the assignment modifies the
+variable in the script scope rather than creating a new variable in the task's local scope.
 
 ### Task arguments fail when running multiple tasks
 
@@ -282,7 +288,7 @@ $ImportScripts = @(
 
 **Cause:** A task in `-TaskName` or `-DependsOn` does not exist.
 
-**Cure:** Run `./build.ps1 list` and confirm names match exactly.
+**Cure:** Run `./build.ps1 list` to get the list of available tasks.
 
 ### Circular task dependency detected
 
@@ -303,16 +309,6 @@ $ImportScripts = @(
 - Update the task's `-AllowedExitCodes` parameter to include the expected exit code(s). Setting it
   to an empty array (`@()`) disables exit code checking.
 - Alternatively, set `$global:LASTEXITCODE = 0` before exiting the task.
-
-### Task cannot access script variables
-
-**Symptom:** Variable exists in `build.ps1` but is missing inside a task.
-
-**Cause:** Tasks run in isolated scope and only receive variables imported through the `$Variables`
-dictionary.
-
-**Cure:** Add the value to the `$Variables` dictionary or set the value in the global scope, e.g.,
-`$global:MyVariable = 123`.
 
 ### Secret prompting issues in CI
 

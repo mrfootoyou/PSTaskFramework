@@ -1,6 +1,32 @@
 <#
 .DESCRIPTION
     Task management helpers for PowerShell.
+
+    Q: Why is the PSTaskFramework implemented as a PowerShell module?
+    A: Because of the way PowerShell executes script blocks.
+       When a script block (SB) is invoked, PowerShell uses the SB's Module property to determine
+       its execution context (session state and scope):
+       - If the Module property is the current module (or is unset), then the script block will
+         be executed in the current context (in a new child scope when using the call operator).
+       - Otherwise the script block will be executed using the session state of the module it was
+         defined in. The exact scope within the session depends on the call stack: PowerShell
+         will search the call stack for the nearest (most recent) stack frame belonging to the
+         SB's module and will execute the SB in a child scope of that frame. If a matching frame
+         is not found, the nearest global-scope frame is used.
+       This has a few critically important implications:
+       1. SBs _defined_ in other modules will be executed in the context (and nearest scope!)
+          of the module/script they were defined in. For external tasks, that will be the scope
+          where the `Invoke-TaskFramework` function is called (usually script scope), thus they
+          will have access to all variables and functions defined in their script.
+       2. SBs _defined_ in this module do have access to this module's session state. Thus tasks
+          defined in this module will have access to all stack variables going back to the
+          `Invoke-TaskFramework` invocation.
+       3. SBs without a module session (e.g. created via `[scriptblock]::Create("...")`) will be
+          executed as if they were defined in this module (see above).
+
+    That is why it is so important that the PSTaskFramework is implemented as a module. It
+    ensures that tasks defined in the build script have access to all variables and functions in
+    the build script, while still allowing the framework to manage task definitions and execution.
 .NOTES
     SPDX-License-Identifier: Unlicense
     Source: http://github.com/mrfootoyou/pstaskframework
@@ -311,24 +337,29 @@ function Add-TaskFrameworkDefaultTasks {
 
                     # Displays only the name, synopsis, and examples.
                     [Parameter(ParameterSetName = 'Examples', Mandatory)]
-                    [switch]$Examples
+                    [switch]$Examples,
+
+                    # When specified, the help output will not be paged. By default, the help output is paged
+                    # if it exceeds the console height.
+                    [switch]$NoPaging
                 )
 
-                $getHelpArgs = @{} + $PSBoundParameters
-                $getHelpArgs.Remove('TaskName') | Out-Null
-
+                $null = $PSBoundParameters.Remove('TaskName')
+                $null = $PSBoundParameters.Remove('NoPaging')
                 $getTaskHelpArgs = @{
-                    GetHelpArgs     = $getHelpArgs
-                    HelpTaskName    = $Task.Name # this task's name
-                    BuildScriptPath = $BuildInvocation.MyCommand.Path ?? './build.ps1'
-                    TaskNameArgName = $TaskNameArgName ?? 'TaskName'
-                    TaskArgsArgName = $TaskArgsArgName ?? 'TaskArgs'
+                    TaskName        = $TaskName
+                    GetHelpArgs     = $PSBoundParameters
+                    HelpTaskName    = $TaskContext.Task.Name # this task's name
+                    BuildScriptPath = $TaskContext.BuildScriptPath ?? './build.ps1'
+                    TaskNameArgName = $TaskContext.TaskNameArgName ?? 'TaskName'
+                    TaskArgsArgName = $TaskContext.TaskArgsArgName ?? 'TaskArgs'
                 }
-                if ($TaskName) {
-                    $getTaskHelpArgs.TaskName = $TaskName
-                }
+                $help = Get-TaskFrameworkHelp @getTaskHelpArgs
 
-                Get-TaskFrameworkHelp @getTaskHelpArgs | Out-Host
+                if ($NoPaging) { $help | Out-Host }
+                elseif ($IsWindows) { $help | more }
+                elseif (Get-Command 'less' -ErrorAction Ignore) { $help | less }
+                else { $help | Out-Host -Paging }
             }
         }
         default {
@@ -350,7 +381,6 @@ function Get-TaskFrameworkHelp {
         [System.String]
         The formatted help string.
     #>
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingInvokeExpression', '', Justification = 'Necessary for dynamic function creation.')]
     [CmdletBinding()]
     [OutputType([string])]
     param(
@@ -379,12 +409,17 @@ function Get-TaskFrameworkHelp {
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
 
-    $null = $TaskArgsArgName # avoid "unused parameter" warning
-
     # Get the help info for the build script. We will merge it's parameters and syntax
     # with the task help info to produce the final help output.
     $buildHelp = Get-Help -Name $BuildScriptPath @GetHelpArgs
     if (!$buildHelp) { return }
+
+    if (-not ($buildHelp.parameters.parameter.name -eq $TaskNameArgName)) {
+        Write-Warning "Parameter '$TaskNameArgName' was not found in the build script. Add the actual parameter name to the `$TaskContext (e.g., `$TaskContext.TaskNameArgName = '<actual_parameter_name>')."
+    }
+    if (-not ($buildHelp.parameters.parameter.name -eq $TaskArgsArgName)) {
+        Write-Warning "Parameter '$TaskArgsArgName' was not found in the build script. Add the actual parameter name to the `$TaskContext (e.g., `$TaskContext.TaskArgsArgName = '<actual_parameter_name>')."
+    }
 
     function normalizeText([string]$text) {
         # trim and normalize line endings to CR to simplify regexes
@@ -433,7 +468,7 @@ function Get-TaskFrameworkHelp {
     # Use the taskAction to generate a temporary function that we can call Get-Help on to generate the
     # help info. We use a unique name to aid in regex replacements later.
     $functionName = "_$([Guid]::NewGuid().ToString('N'))"
-    $tempModule = New-Module -ScriptBlock ([scriptblock]::Create("function $functionName {$taskAction}"))
+    $tempModule = New-Module -ScriptBlock ([scriptblock]::Create("function $functionName {$taskAction.Ast.ParamBlock}"))
     $taskHelp = Get-Help $functionName @GetHelpArgs
     $tempModule | Remove-Module
 
@@ -669,78 +704,59 @@ function Invoke-Task {
         Invokes a task defined in the task framework.
 
         This is typically not called directly; use Invoke-TaskFramework instead.
-
-        The function will import the specified scripts and variables into the scope
-        of the invoked task, allowing them to be used in the task action. Mutable variables,
-        such as HashTables or lists, can be used to share state across tasks, but be cautious
-        of potential side effects.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingInvokeExpression', '', Justification = 'Using Invoke-Expression is necessary to allow task actions to accept named arguments.')]
     param(
         [Parameter(Mandatory)]
         [TaskDefinition]$Task,
         [ValidateNotNull()]
-        [object[]]$TaskArgs = @(),
-        [ValidateNotNull()]
-        [hashtable]$Variables = @{},
-        [ValidateNotNull()]
-        [string[]]$ImportScripts = @()
+        [object[]]$TaskArgs = @()
     )
-
-    if ($null -eq $Task.Action) {
-        Write-Verbose "Skipping task '$($Task.Name)' since it has no action."
-        return
-    }
-
-    Import-Module PSArgs -Verbose:$false
-    Import-Module Secrets -Verbose:$false
-    Import-Module BuildHelpers -Verbose:$false
-
-    $ImportScripts.foreach{
-        Write-Verbose "Importing script '$_'."
-        if ($_ -like '*.ps1') {
-            . $_
-        }
-        else {
-            Import-Module $_ -Verbose:$false
-        }
-    }
-
-    $Variables.Keys.foreach{
-        Write-Verbose "Importing variable '$_' with value $(ConvertTo-PSString $Variables[$_] -UseQuotes)."
-        Set-Variable -Name $_ -Value $Variables[$_] -Force -ea Ignore
-    }
 
     $TaskName = $Task.Name
 
-    $private:_taskCommandArgs = ConvertTo-CommandArg $TaskArgs
-    if ($_taskCommandArgs) {
-        Write-Verbose "Invoking task '$TaskName' with arguments: $_taskCommandArgs"
+    if ($null -eq $Task.Action) {
+        Write-Verbose "Skipping task '$TaskName' since it has no action."
+        return
+    }
+
+    $TaskContext.Task = $Task
+    $TaskContext.TaskArgs = $TaskArgs
+
+    Import-Module PSArgs -Verbose:$false
+    $taskCommandArgs = ConvertTo-CommandArg $TaskArgs
+    if ($taskCommandArgs) {
+        Write-Verbose "Invoking task '$TaskName' with arguments: $taskCommandArgs"
     }
     else {
         Write-Verbose "Invoking task '$TaskName' with no arguments."
     }
 
-    $global:LASTEXITCODE = 0
-
+    # Use Invoke-Expression to parse $TaskArgs in the context of the task's action.
+    # This enables $TaskArgs to contain named arguments (i.e. '-foo','bar') not
+    # just positional arguments ('bar')...
     try {
-        # Use Invoke-Expression to invoke the script block with arguments. This enables
-        # $TaskArgs to contain named parameters (i.e. '-foo','bar') not just positional
-        # parameters ('bar').
-        Invoke-Expression -Command "&{`n$($Task.Action)`n} $_taskCommandArgs"
+        $tArgs = `
+            Invoke-Expression "&{`n$($Task.Action.Ast.ParamBlock) return @{bound=`$PSBoundParameters;unbound=`$args}} $taskCommandArgs"
+
+        $bound = $tArgs.bound
+        $unbound = $tArgs.unbound
     }
     catch {
-        # Since we used Invoke-Expression to execute the task's action, the stack trace will
-        # not contain the action's actual filename and line number. Let's fixup the stack
-        # trace to include the task action's filename and line number...
         Repair-TaskStackTrace -ErrorRecord $_ -Task $Task -TaskActionStartLine 2
-        throw $_
+        throw
     }
+
+    # Now invoke the task action with the parsed arguments...
+    $global:LASTEXITCODE = 0
+    & $Task.Action @bound @unbound
+    $TaskContext.ExitCode = $global:LASTEXITCODE
 
     if ($Task.AllowedExitCodes.Count -gt 0 -and $global:LASTEXITCODE -notin $Task.AllowedExitCodes) {
         Write-Verbose "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
         throw "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
     }
+
     Write-Verbose "Completed task '$TaskName' with exit code $global:LASTEXITCODE."
     $global:LASTEXITCODE = 0 # reset to avoid affecting the final exit code
 }
@@ -752,11 +768,6 @@ function Invoke-TaskFramework {
 
         Tasks will be executed in the order they were defined. If a task has dependencies,
         those will be executed first unless $SkipDependencies is specified.
-
-        The function will import the specified scripts and variables into the scope
-        of each invoked task, allowing them to be used in task actions. Mutable variables,
-        such as HashTables or lists, can be used to share state across tasks, but be cautious
-        of potential side effects.
     #>
     [CmdletBinding(PositionalBinding = $false)]
     param(
@@ -775,15 +786,13 @@ function Invoke-TaskFramework {
         # Indicates whether to skip invoking dependencies of specified tasks. Defaults to $false.
         [switch]$SkipDependencies,
 
-        # A list of scripts to import into the scope of invoked tasks. This can be used to share
-        # helper functions across tasks.
-        [ValidateNotNull()]
-        [string[]]$ImportScripts = @(),
+        # The path to the build script. This is used for help generation. Defaults to './build.ps1'.
+        [ValidateNotNullOrEmpty()]
+        [string]$BuildScriptPath = './build.ps1',
 
-        # A hashtable of variables to import into the scope of invoked tasks. This can be used to
-        # pass configuration or state to tasks.
+        # A hashtable used to store information about the current task.
         [ValidateNotNull()]
-        [hashtable]$Variables = @{},
+        [hashtable]$TaskContext = @{},
 
         # Indicates that the function should exit the script if a failure occurs. If not specified,
         # the function will throw an exception failure.
@@ -792,7 +801,9 @@ function Invoke-TaskFramework {
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
     $ErrorActionPreference = 'Stop'
 
-    $private:_orig = @{
+    $BuildScriptPath = Resolve-Path $BuildScriptPath -Relative
+
+    $orig = @{
         PSModulePath = $env:PSModulePath
         Location     = Get-Location
     }
@@ -811,19 +822,15 @@ function Invoke-TaskFramework {
         $pathSeparator = $IsWindows ? ';' : ':'
         $env:PSModulePath = "$PSScriptRoot$pathSeparator$env:PSModulePath"
 
-        $private:targs = @{
-            Task          = $null
-            TaskArgs      = @()
-            ImportScripts = $ImportScripts
-            Variables     = $Variables
-        }
-
         Write-Verbose "Executing tasks: $($TasksToExecute.Name -join ', ')"
 
+        $TaskContext.WorkingDirectory = $WorkingDirectory
+        $TaskContext.SkipDependencies = $SkipDependencies
+        $TaskContext.TasksToExecute = $TasksToExecute
+        $TaskContext.BuildScriptPath = $BuildScriptPath
+
         foreach ($task in $TasksToExecute) {
-            $targs.Task = $task
-            $targs.TaskArgs = $task.Name -eq $TaskName ? $TaskArgs : @()
-            Invoke-Task @targs
+            Invoke-Task -Task $Task -TaskArgs ($task.Name -eq $TaskName ? $TaskArgs : @())
         }
 
         Write-Verbose "Done executing tasks."
@@ -840,8 +847,8 @@ function Invoke-TaskFramework {
         throw
     }
     finally {
-        $env:PSModulePath = $_orig.PSModulePath
-        Set-Location $_orig.Location
+        $env:PSModulePath = $orig.PSModulePath
+        Set-Location $orig.Location
     }
 }
 

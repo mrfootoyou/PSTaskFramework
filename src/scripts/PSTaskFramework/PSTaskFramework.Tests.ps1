@@ -39,7 +39,7 @@ Describe 'PSTaskFramework Module' {
         Task 'alpha' -Description 'first task' -Action { $Shared.State.Add('alpha') } -DependsOn @('beta')
         Task 'beta' -Description 'second task' -Action { $Shared.State.Add('beta') }
 
-        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('alpha') -Variables @{ Shared = $shared }
+        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('alpha')
 
         $shared.State | Should -Be @('beta', 'alpha')
     }
@@ -56,7 +56,7 @@ Describe 'PSTaskFramework Module' {
         Task 'dep' { $Shared.State.Add('dep') }
         Task 'main' { $Shared.State.Add('main') } -DependsOn @('dep')
 
-        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('main') -Variables @{ Shared = $shared }
+        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('main')
 
         $shared.State | Should -Be @('dep', 'main')
     }
@@ -67,7 +67,7 @@ Describe 'PSTaskFramework Module' {
         Task 'dep' { $Shared.State.Add('dep') }
         Task 'main' { $Shared.State.Add('main') } -DependsOn @('dep')
 
-        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('main') -SkipDependencies -Variables @{ Shared = $shared }
+        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('main') -SkipDependencies
 
         $shared.State | Should -Be @('main')
     }
@@ -80,7 +80,7 @@ Describe 'PSTaskFramework Module' {
             $Shared.Captured = ("{0}:{1}" -f $Name, $Count)
         }
 
-        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('echo') -TaskArgs @('sample', 3) -Variables @{ Shared = $shared }
+        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('echo') -TaskArgs @('sample', 3)
 
         $shared.Captured | Should -Be 'sample:3'
     }
@@ -95,38 +95,32 @@ Describe 'PSTaskFramework Module' {
         $global:LASTEXITCODE | Should -Be -1
     }
 
-    It 'imports variables into task scope' {
+    It 'executes task in script-scope' {
         $shared = [ordered]@{ Result = '' }
+        $Greeting = 'hello'
+        $Name = 'world'
 
         Task 'use-vars' {
             $Shared.Result = "$Greeting, $Name"
         }
 
-        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('use-vars') -Variables @{
-            Greeting = 'hello'
-            Name     = 'world'
-            Shared   = $shared
-        }
+        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('use-vars')
 
         $shared.Result | Should -Be 'hello, world'
     }
 
-    It 'imports helper scripts before task invocation' {
-        $shared = [ordered]@{ Result = '' }
-        $helperPath = Join-Path $TestDrive 'helper.ps1'
-        Set-Content -Path $helperPath -Value @'
-function Get-Message {
-    'from helper'
-}
-'@
+    It 'executes task in task-scope' {
+        $Name = 'outer scope'
 
-        Task 'use-helper' {
-            $Shared.Result = Get-Message
+        Task 'use-vars' {
+            # modifying an outer variable is not seen outside the task
+            $Name = 'task scope'
+            $null = $Name # avoid unused variable warning
         }
 
-        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('use-helper') -ImportScripts @($helperPath) -Variables @{ Shared = $shared }
+        Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('use-vars')
 
-        $shared.Result | Should -Be 'from helper'
+        $Name | Should -Be 'outer scope'
     }
 
     It 'preserves non-zero task exit code on failure' {
@@ -204,7 +198,7 @@ function Get-Message {
                 $field = $errorRecord.GetType().GetField('_scriptStackTrace', $bindingFlags)
                 $field.SetValue($errorRecord, $fakeStack)
 
-                # Action.Ast.Extent.StartLineNumber == 1 for inline scriptblocks
+                # Action.Ast.Extent.StartLineNumber == 1 for inline script blocks
                 # rewritten line = 1 + 5 - 2 = 4
                 $task = [TaskDefinition]@{ Name = 'test-task'; Action = [scriptblock]::Create("throw 'error'") }
                 Repair-TaskStackTrace -ErrorRecord $errorRecord -Task $task -TaskActionStartLine 2
@@ -370,7 +364,7 @@ task2 described task 2       {task1}
             It 'calls Get-TaskFrameworkHelp when invoked' {
                 Add-TaskFrameworkDefaultTasks -Include 'help'
 
-                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'help'
+                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'help' -TaskArgs @('-NoPaging')
 
                 Should -Invoke Get-TaskFrameworkHelp -ModuleName PSTaskFramework -Times 1
                 Should -Invoke Out-Host -ModuleName PSTaskFramework -Times 1
@@ -378,25 +372,22 @@ task2 described task 2       {task1}
 
             It 'calls Get-TaskFrameworkHelp when context is customized' {
                 Add-TaskFrameworkDefaultTasks -Include 'list', 'help' -NameMap @{ help = 'getHelp' }
+                '#dummy script' | Out-File "$TestDrive/myBuild.ps1"
 
                 $invokeArgs = @{
                     WorkingDirectory = $TestDrive
                     TaskName         = 'getHelp'
                     TaskArgs         = @('list', '-full')
-                    Variables        = @{
+                    BuildScriptPath  = "$TestDrive/myBuild.ps1"
+                    TaskContext      = @{
                         TaskNameArgName = 'tName'
                         TaskArgsArgName = 'tArgs'
-                        BuildInvocation = [PSCustomObject]@{
-                            MyCommand = [PSCustomObject]@{
-                                Path = 'c:/foo/myBuild.ps1'
-                            }
-                        }
                     }
                 }
                 Invoke-TaskFramework @invokeArgs
 
                 Should -Invoke Get-TaskFrameworkHelp -ModuleName PSTaskFramework -Times 1 -ParameterFilter {
-                    $BuildScriptPath | Should -Be 'c:/foo/myBuild.ps1'
+                    $BuildScriptPath | Should -Be (Resolve-Path "$TestDrive/myBuild.ps1" -Relative)
                     $TaskName | Should -Be 'list'
                     $HelpTaskName | Should -Be 'getHelp'
                     $TaskNameArgName | Should -Be 'tName'
@@ -452,9 +443,9 @@ param (
         }
 
         It 'uses TASK NAME heading instead of NAME for a task' {
-            Task 'mytask' { param() }
+            Task 'myTask' { param() }
 
-            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'mytask'
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'myTask'
 
             $output | Should -Match '(?m)^TASK NAME'
             $output | Should -Not -Match '(?m)^NAME$'
@@ -475,23 +466,23 @@ param (
         }
 
         It 'shows no dependencies in DEPENDS ON when task has none' {
-            Task 'nodeps' { param() }
+            Task 'noDeps' { param() }
 
-            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'nodeps'
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'noDeps'
 
             $output | Should -Match '(?m)^DEPENDS ON'
             $output | Should -Match 'This task has no task dependencies\.'
         }
 
         It 'lists dependencies in DEPENDS ON when task has DependsOn' {
-            Task 'prereq' { param() }
-            Task 'withdeps' { param() } -DependsOn @('prereq')
+            Task 'preReq' { param() }
+            Task 'withDeps' { param() } -DependsOn @('preReq')
 
-            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'withdeps'
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'withDeps'
 
             $output | Should -Match '(?m)^DEPENDS ON'
             $output | Should -Match 'This task depends on the following tasks'
-            $output | Should -Match '\- prereq'
+            $output | Should -Match '\- preReq'
         }
 
         It 'generates help for a meta-task with null action' {
@@ -504,15 +495,15 @@ param (
         }
 
         It 'includes the build script path in the syntax section' {
-            Task 'mytask2' { param() }
+            Task 'myTask2' { param() }
 
-            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'mytask2'
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'myTask2'
 
             $output | Should -Match ([regex]::Escape($script:buildScript))
         }
 
         It 'respects custom HelpTaskName in the remarks section' {
-            Task 'sometask' {
+            Task 'someTask' {
                 <#
                 .DESCRIPTION
                     A task with a description.
@@ -520,9 +511,9 @@ param (
                 param()
             }
 
-            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'sometask' -HelpTaskName 'usage'
+            $output = Get-TaskFrameworkHelp -BuildScriptPath $script:buildScript -TaskName 'someTask' -HelpTaskName 'usage'
 
-            $output | Should -Match ([regex]::Escape("$($script:buildScript) usage sometask"))
+            $output | Should -Match ([regex]::Escape("$($script:buildScript) usage someTask"))
         }
     }
 }

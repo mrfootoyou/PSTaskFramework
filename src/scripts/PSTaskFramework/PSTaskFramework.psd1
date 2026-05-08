@@ -39,7 +39,11 @@
     # NestedModules        = @()
 
     # Modules that must be imported into the global environment prior to importing this module
-    # RequiredModules      = @()
+    RequiredModules      = @(
+        './BuildHelpers/BuildHelpers.psm1'
+        './Secrets/Secrets.psm1'
+        './PSArgs/PSArgs.psm1'
+    )
 
     # Assemblies that must be loaded prior to importing this module
     # RequiredAssemblies = @()
