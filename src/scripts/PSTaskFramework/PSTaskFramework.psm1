@@ -55,7 +55,7 @@ function Initialize-TaskFramework {
         (name can be customized via the `$env:PSTaskFrameworkTaskContextName` environment variable).
     #>
     [CmdletBinding(PositionalBinding = $false)]
-    [OutputType([hashtable])]
+    [OutputType([PSCustomObject])]
     param(
         # The default tasks to include in the task framework. Defaults to 'list' and 'help'.
         # See Add-TaskFrameworkDefaultTasks for details on what these tasks do.
@@ -84,12 +84,22 @@ function Initialize-TaskFramework {
     }
     if (!($BuildScriptPath = Convert-Path $BuildScriptPath)) { return }
 
-    $TaskContext = @{}
-    $TaskContext['AllTasks'] = [ordered]@{}
-    $TaskContext['TasksSorted'] = $true
-    $TaskContext['BuildScriptPath'] = $BuildScriptPath
-    $TaskContext['TaskNameArgName'] = $TaskNameArgName
-    $TaskContext['TaskArgsArgName'] = $TaskArgsArgName
+    $TaskContext = [PSCustomObject]@{
+        WorkingDirectory = $null
+        BuildScriptPath  = $BuildScriptPath
+        TaskNameArgName  = $TaskNameArgName
+        TaskArgsArgName  = $TaskArgsArgName
+        HelpTaskName     = $null
+        AllTasks         = [ordered]@{}
+        AllTasksSorted   = $true
+        TasksToExecute   = $null
+        SkipDependencies = $null
+        Start            = $null
+        CurrentTask      = $null
+        Results          = $null
+        Duration         = $null
+        ExitCode         = $null
+    }
 
     if ($AddDefaultTasks.Count -gt 0) {
         Add-TaskFrameworkDefaultTasks -Include $AddDefaultTasks -TaskContext $TaskContext
@@ -113,28 +123,29 @@ function Get-TaskFrameworkContext {
         [string]$Name = $env:PSTaskFrameworkTaskContextName ?? 'TaskContext'
     )
 
-    $context = $null
-
     # First, try the current session state where it is always called 'TaskContext'...
     # Get-Variable will also return variables defined in the global scope...
     $TaskContextVar = Get-Variable -Name 'TaskContext' -ErrorAction Ignore
     if ($TaskContextVar.Module -eq $ExecutionContext.SessionState.Module) {
-        $context = $TaskContextVar.Value
+        $TaskContext = $TaskContextVar.Value
+    }
+    else {
+        $TaskContext = $null
     }
 
     # if not found, try from caller's session state...
-    if ($null -eq $context -and $ExecutionContext.SessionState.Module) {
-        $context = $ExecutionContext.SessionState.Module.GetVariableFromCallersModule($Name).Value
+    if ($null -eq $TaskContext -and $ExecutionContext.SessionState.Module) {
+        $TaskContext = $ExecutionContext.SessionState.Module.GetVariableFromCallersModule($Name).Value
     }
 
-    if ($null -eq $context) {
+    if ($null -eq $TaskContext) {
         throw "Task context variable '$Name' not found. Make sure to define it in the build script, e.g., `$$Name = Initialize-TaskFramework."
     }
-    if ($context -isnot [hashtable]) {
-        throw "Task context variable '$Name' is not a hashtable. Make sure to define it in the build script, e.g., `$$Name = Initialize-TaskFramework."
+    if ($TaskContext -isnot [PSCustomObject]) {
+        throw "Task context variable '$Name' is not a PSCustomObject. Make sure to define it in the build script, e.g., `$$Name = Initialize-TaskFramework."
     }
 
-    return $context
+    return $TaskContext
 }
 
 function getTask {
@@ -144,10 +155,10 @@ function getTask {
         [Parameter(Mandatory, Position = 0)]
         [string]$TaskName,
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
 
-    $allTasks = $TaskContext['AllTasks']
+    $allTasks = $TaskContext.AllTasks
     if ($allTasks -isnot [ordered] -or !$allTasks.Contains($TaskName)) {
         Write-Error -Exception "Task '$TaskName' not found." -CategoryActivity 'Get task' -Category ObjectNotFound -TargetObject $TaskName
         return
@@ -168,16 +179,16 @@ function getAllOrderedTasks {
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
     param(
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
 
-    $allTasks = $TaskContext['AllTasks']
+    $allTasks = $TaskContext.AllTasks
     if ($allTasks -isnot [ordered]) {
         Write-Warning 'TaskContext is missing an ordered AllTasks dictionary. This likely means that the TaskContext was not initialized properly. Reinitializing the AllTasks dictionary.'
-        $TaskContext['AllTasks'] = ($allTasks = [ordered]@{})
-        $TaskContext['TasksSorted'] = $true
+        $TaskContext.AllTasks = ($allTasks = [ordered]@{})
+        $TaskContext.AllTasksSorted = $true
     }
-    if ($TaskContext['TasksSorted'] -eq $true) {
+    if ($TaskContext.AllTasksSorted -eq $true) {
         return $allTasks
     }
 
@@ -218,8 +229,8 @@ function getAllOrderedTasks {
         $allTasks[$task.Name] = $task
     }
 
-    $TaskContext['AllTasks'] = $allTasks
-    $TaskContext['TasksSorted'] = $true
+    $TaskContext.AllTasks = $allTasks
+    $TaskContext.AllTasksSorted = $true
     return $allTasks
 }
 
@@ -240,7 +251,7 @@ function Get-TaskFrameworkTasks {
     param(
         # The task context hashtable. Defaults to the current task context returned by Get-TaskFrameworkContext.
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
     try {
@@ -272,9 +283,9 @@ function addTask {
         [ValidateNotNull()]
         [int[]]$AllowedExitCodes = @(0),
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
-    $allTasks = ($TaskContext['AllTasks'] ??= [ordered]@{})
+    $allTasks = ($TaskContext.AllTasks ??= [ordered]@{})
     if ($allTasks -isnot [ordered]) {
         Write-Error -Exception "Invalid task context." -CategoryActivity 'Add task' -Category ResourceExists -TargetObject $Name
     }
@@ -288,7 +299,7 @@ function addTask {
         Action           = $Action
         AllowedExitCodes = $AllowedExitCodes
     }
-    $TaskContext['TasksSorted'] = $false
+    $TaskContext.AllTasksSorted = $false
 }
 
 function Task {
@@ -326,7 +337,7 @@ function Task {
 
         # The task context hashtable. Defaults to the current task context returned by Get-TaskFrameworkContext.
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, InformationAction
     addTask @PSBoundParameters
@@ -351,7 +362,7 @@ function Add-TaskFrameworkDefaultTasks {
 
         # The task context hashtable. Defaults to the current task context returned by Get-TaskFrameworkContext.
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
 
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync WarningAction, Verbose
@@ -379,7 +390,7 @@ function Add-TaskFrameworkDefaultTasks {
         'help' {
             $name = $NameMap[$_] ?? $_
             Write-Verbose "Including default 'help' task as '$name'."
-            $TaskContext['HelpTaskName'] = $name
+            $TaskContext.HelpTaskName = $name
             addTask $name -Description 'Show detailed help for a task' -TaskContext $TaskContext {
                 <#
                 .DESCRIPTION
@@ -423,7 +434,7 @@ function Add-TaskFrameworkDefaultTasks {
                     [switch]$NoPaging
                 )
 
-                $getHelpArgs = @{} + $PSBoundParameters
+                $getHelpArgs = [hashtable]$PSBoundParameters
                 $null = $getHelpArgs.Remove('TaskName')
                 $null = $getHelpArgs.Remove('NoPaging')
                 $help = Get-TaskFrameworkHelp -TaskName $TaskName -GetHelpArgs $getHelpArgs
@@ -465,14 +476,14 @@ function Get-TaskFrameworkHelp {
 
         # The task context hashtable. Defaults to the current task context returned by Get-TaskFrameworkContext.
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
 
-    $helpTaskName = $TaskContext['HelpTaskName'] ?? 'help'
-    $buildScriptPath = $TaskContext['BuildScriptPath'] ?? (Convert-Path './build.ps1')
-    $taskNameArgName = $TaskContext['TaskNameArgName'] ?? 'TaskName'
-    $taskArgsArgName = $TaskContext['TaskArgsArgName'] ?? 'TaskArgs'
+    $helpTaskName = $TaskContext.HelpTaskName ?? 'help'
+    $buildScriptPath = $TaskContext.BuildScriptPath ?? (Convert-Path './build.ps1')
+    $taskNameArgName = $TaskContext.TaskNameArgName ?? 'TaskName'
+    $taskArgsArgName = $TaskContext.TaskArgsArgName ?? 'TaskArgs'
 
     # Get the help info for the build script. We will merge it's parameters and syntax
     # with the task help info to produce the final help output.
@@ -778,18 +789,33 @@ function Invoke-Task {
         [ValidateNotNull()]
         [object[]]$TaskArgs = @(),
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
 
     $TaskName = $Task.Name
 
+    $global:LASTEXITCODE = 0
+    $TaskContext.CurrentTask = $Task
+    $TaskContext.Results ??= [ordered]@{}
+    $TaskContext.Results[$TaskName] = (
+        $result = [PSCustomObject]@{
+            Start    = [datetime]::UtcNow
+            TaskArgs = [PSCustomObject]@{
+                Raw     = $TaskArgs
+                Bound   = $null
+                Unbound = $null
+            }
+            Duration = $null
+            ExitCode = $null
+        })
+
     if ($null -eq $Task.Action) {
         Write-Verbose "Skipping task '$TaskName' since it has no action."
+        $result.Duration = [timespan]::Zero
+        $result.ExitCode = 0
+        $TaskContext.CurrentTask = $null
         return
     }
-
-    $TaskContext['Task'] = $Task
-    $TaskContext['TaskArgs'] = $TaskArgs
 
     $taskCommandArgs = @()
     if ($TaskArgs) {
@@ -805,26 +831,40 @@ function Invoke-Task {
     # This enables $TaskArgs to contain named arguments (i.e. '-foo','bar') not
     # just positional arguments ('bar')...
     try {
-        $tArgs = Invoke-Expression "&{`n$($Task.Action.Ast.ParamBlock) return @{bound=`$PSBoundParameters;unbound=`$args}} $taskCommandArgs"
-        $bound = $tArgs.bound
-        $unbound = $tArgs.unbound
+        $tArgs = Invoke-Expression "&{`n$($Task.Action.Ast.ParamBlock) return @{Bound=`$PSBoundParameters;Unbound=`$args}} $taskCommandArgs"
+        $result.TaskArgs.Bound = $tArgs.Bound
+        $result.TaskArgs.Unbound = $tArgs.Unbound
     }
     catch {
         Repair-TaskStackTrace -ErrorRecord $_ -Task $Task -TaskActionStartLine 2
+        $result | Add-Member 'Error' $_ -Force
+        $result.Duration = [datetime]::UtcNow - $result.Start
         throw
     }
 
     # Now invoke the task action with the parsed arguments...
-    $global:LASTEXITCODE = 0
-    & $Task.Action @bound @unbound
-    $TaskContext['ExitCode'] = $global:LASTEXITCODE
-
-    if ($Task.AllowedExitCodes.Count -gt 0 -and $global:LASTEXITCODE -notin $Task.AllowedExitCodes) {
-        Write-Verbose "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
-        throw "Task '$TaskName' failed with exit code $global:LASTEXITCODE."
+    try {
+        $bound = $result.TaskArgs.Bound
+        $unbound = $result.TaskArgs.Unbound
+        & $Task.Action @bound @unbound
+    }
+    catch {
+        $result | Add-Member 'Error' $_ -Force
+        throw
+    }
+    finally {
+        $result.Duration = [datetime]::UtcNow - $result.Start
     }
 
-    Write-Verbose "Completed task '$TaskName' with exit code $global:LASTEXITCODE."
+    $result.ExitCode = $global:LASTEXITCODE
+    if ($Task.AllowedExitCodes.Count -gt 0 -and $result.ExitCode -notin $Task.AllowedExitCodes) {
+        Write-Verbose "Task '$TaskName' failed with exit code $($result.ExitCode)."
+        throw "Task '$TaskName' failed with exit code $($result.ExitCode)."
+    }
+
+    # Success!
+    Write-Verbose "Completed task '$TaskName' with exit code $($result.ExitCode)."
+    $TaskContext.CurrentTask = $null
     $global:LASTEXITCODE = 0 # reset to avoid affecting the final exit code
 }
 
@@ -845,7 +885,7 @@ function getOrderedTasks {
         [Parameter(Mandatory, Position = 0)]
         [string[]]$TaskNames,
         [switch]$IncludeDependencies,
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
 
     # get all tasks in dependency order...
@@ -910,7 +950,7 @@ function Invoke-TaskFramework {
 
         # The task context hashtable. Defaults to the current task context returned by Get-TaskFrameworkContext.
         [ValidateNotNull()]
-        [hashtable]$TaskContext = (Get-TaskFrameworkContext)
+        [PSCustomObject]$TaskContext = (Get-TaskFrameworkContext)
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
     $ErrorActionPreference = 'Stop'
@@ -920,6 +960,10 @@ function Invoke-TaskFramework {
         Location     = Get-Location
     }
 
+    $TaskContext.WorkingDirectory = $WorkingDirectory
+    $TaskContext.SkipDependencies = $SkipDependencies
+    $TaskContext.Start = [datetime]::UtcNow
+
     Write-Verbose "Working directory: '$WorkingDirectory'."
     Set-Location $WorkingDirectory
     try {
@@ -928,6 +972,7 @@ function Invoke-TaskFramework {
         }
 
         $tasksToExecute = getOrderedTasks $TaskName -IncludeDependencies:(!$SkipDependencies) -TaskContext $TaskContext
+        $TaskContext.TasksToExecute = $tasksToExecute
 
         # Add the scripts directory to the module path so that task actions
         # can more easily import helper modules if needed.
@@ -936,18 +981,18 @@ function Invoke-TaskFramework {
 
         Write-Verbose "Executing tasks: $($tasksToExecute.Name -join ', ')"
 
-        $TaskContext['WorkingDirectory'] = $WorkingDirectory
-        $TaskContext['SkipDependencies'] = $SkipDependencies
-        $TaskContext['TasksToExecute'] = $tasksToExecute
-
         foreach ($task in $tasksToExecute) {
             Invoke-Task -Task $task -TaskArgs ($task.Name -eq $TaskName ? $TaskArgs : @()) -TaskContext $TaskContext
         }
 
         Write-Verbose "Done executing tasks."
+        $TaskContext.ExitCode = $global:LASTEXITCODE
     }
     catch {
         if ($global:LASTEXITCODE -eq 0) { $global:LASTEXITCODE = -1 }
+        $TaskContext | Add-Member 'Error' $_ -Force -ea Ignore
+        $TaskContext.ExitCode = $global:LASTEXITCODE
+
         Write-Verbose "Error: $_`n$(($_ | Format-List -Force | Out-String).Trim())"
         if ($ExitOnError) {
             # Output a user-friendly error message with a stack trace
@@ -958,6 +1003,7 @@ function Invoke-TaskFramework {
         throw
     }
     finally {
+        $TaskContext.Duration = [datetime]::UtcNow - $TaskContext.Start
         $env:PSModulePath = $orig.PSModulePath
         Set-Location $orig.Location
     }
