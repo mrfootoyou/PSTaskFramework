@@ -208,7 +208,6 @@ Task test -desc 'Execute tests' -dependsOn version {
         $configuration.CodeCoverage.CoveragePercentTarget = 75
     }
 
-    Import-Module PSArgs -Verbose:$false
     Write-Host "$($PSStyle.Dim)>> Invoke-Pester -Configuration $(ConvertTo-PSString $configuration)"
     Invoke-Pester -Configuration $configuration
 
