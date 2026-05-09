@@ -8,7 +8,6 @@
 #Requires -Version 7.4
 # spell:ignore pscustomobject
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 param()
 
 Describe 'PSTaskFramework.PSArgs Module' {

@@ -7,7 +7,6 @@
 #>
 #Requires -Version 7.4
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 param()
 
 Describe 'PSTaskFramework Module' {

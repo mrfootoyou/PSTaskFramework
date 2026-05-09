@@ -18,6 +18,21 @@
                 'win-8_x64_10.0.14393.0_7.0.0_x64_3.1.2_core',
                 'ubuntu_x64_18.04_7.0.0_x64_3.1.2_core'
             )
+            IgnoreCommands = @(
+                # Pester triggers this rule for some reason.
+                'Invoke-Pester'
+                'Describe'
+                'Context'
+                'BeforeDiscovery'
+                'BeforeAll'
+                'BeforeEach'
+                'AfterEach'
+                'AfterAll'
+                'It'
+                'InModuleScope'
+                'Mock'
+                'Should'
+            )
         }
     }
 }
