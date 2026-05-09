@@ -208,14 +208,9 @@ function Read-Secret {
     return $value
 }
 
-$exportModuleMemberParams = @{
-    Function = @(
-        'Read-Secret'
-        'Push-Secret'
-        'Pop-Secret'
-        'Protect-Secret'
-        'Clear-SecretStore'
-    )
-}
-
-Export-ModuleMember @exportModuleMemberParams
+Export-ModuleMember -Function `
+    Read-Secret, `
+    Push-Secret, `
+    Pop-Secret, `
+    Protect-Secret, `
+    Clear-SecretStore
