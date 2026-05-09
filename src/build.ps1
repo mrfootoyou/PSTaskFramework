@@ -66,19 +66,19 @@ $InformationPreference = 'Continue'
 
 # Define the repository root and scripts directory. All tasks will be executed in the
 # context of the repository root ($RepoRoot).
-# Assume this script is located in the repository root.
 $RepoRoot = $PSScriptRoot
 $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
-# Trick to suppress "parameter is never used" warning on params that are only used in tasks.
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+$TaskContext = Initialize-TaskFramework
+
+# Trick to suppress "parameter/variable never used" warning on vars that are only used in tasks.
+$null = $TaskContext # used implicitly by the Task Framework
 $null = $Configuration
 
 ####################################################################################
 # Define all tasks
 ####################################################################################
-Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
-Reset-TaskFramework
-Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
     <#
@@ -146,12 +146,9 @@ Task build -desc 'Build the project' -dependsOn version {
 # the documentation for Invoke-TaskFramework for more details.
 ##############################################################
 
-$TaskContext = @{ } # contains info about the current task during execution.
 Invoke-TaskFramework `
     -TaskName $TaskName `
     -TaskArgs $TaskArgs `
     -SkipDependencies:$SkipDependencies `
     -WorkingDirectory $RepoRoot `
-    -BuildScriptPath $MyInvocation.MyCommand.Path `
-    -TaskContext $TaskContext `
     -ExitOnError

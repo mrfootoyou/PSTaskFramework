@@ -62,7 +62,6 @@ $InformationPreference = 'Continue'
 
 # Define the repository root and scripts directory. All tasks will be executed in the
 # context of the repository root ($RepoRoot).
-# Assume this script is located in the repository root.
 $RepoRoot = $PSScriptRoot
 $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 $PSModuleVersions = @{
@@ -71,12 +70,15 @@ $PSModuleVersions = @{
     ConvertToSARIF   = '1.0.0'
 }
 
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+$TaskContext = Initialize-TaskFramework
+
+# Trick to suppress "parameter/variable never used" warning on vars that are only used in tasks.
+$null = $TaskContext # used implicitly by the Task Framework
+
 ####################################################################################
 # Define all tasks
 ####################################################################################
-Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
-Reset-TaskFramework
-Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
     <#
@@ -206,16 +208,8 @@ Task test -desc 'Execute tests' -dependsOn version {
         $configuration.CodeCoverage.CoveragePercentTarget = 75
     }
 
-    # Run tests within a temporary module (private session) to prevent the
-    # TaskFramework tests from clobbering the current TaskFramework state.
-    $tempModule = New-Module -ArgumentList $PSModuleVersions['Pester'] -ScriptBlock {
-        param($PesterVersion)
-        Import-Module Pester -MinimumVersion $PesterVersion
-        Export-ModuleMember -Function Invoke-Pester
-    }
-
     Write-Host "$($PSStyle.Dim)>> Invoke-Pester -Configuration $(ConvertTo-PSString $configuration)"
-    & $tempModule Invoke-Pester -Configuration $configuration
+    Invoke-Pester -Configuration $configuration
 
     if ($TestReport -and (Test-Path $ReportPath)) {
         Write-Host "Test report: '$ReportPath'." -ForegroundColor Green
@@ -311,12 +305,9 @@ Task analysis -desc 'Execute analysis' -dependsOn version {
 # the documentation for Invoke-TaskFramework for more details.
 ##############################################################
 
-$TaskContext = @{ } # contains info about the current task during execution.
 Invoke-TaskFramework `
     -TaskName $TaskName `
     -TaskArgs $TaskArgs `
     -SkipDependencies:$SkipDependencies `
     -WorkingDirectory $RepoRoot `
-    -BuildScriptPath $MyInvocation.MyCommand.Path `
-    -TaskContext $TaskContext `
     -ExitOnError
