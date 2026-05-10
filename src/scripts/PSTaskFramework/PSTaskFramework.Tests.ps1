@@ -26,7 +26,7 @@ Describe 'PSTaskFramework Module' {
         $buildScript = Join-Path $TestDrive 'dummyBuild.ps1'
         '<# dummy script #>' | Out-File $buildScript
 
-        $TaskContext = Initialize-TaskFramework -BuildScriptPath $buildScript -AddDefaultTasks @()
+        $TaskContext = Initialize-TaskFramework -BuildScriptPath $buildScript
         $null = $TaskContext
     }
 
@@ -37,7 +37,7 @@ Describe 'PSTaskFramework Module' {
         }
 
         It 'returns any context variable' {
-            $Foo = [PSCustomObject]@{ Bar = 233 }
+            $Foo = Initialize-TaskFramework -BuildScriptPath $buildScript
             $context = Get-TaskFrameworkContext -Name 'Foo'
             $context | Should -Be $Foo
         }
@@ -47,18 +47,18 @@ Describe 'PSTaskFramework Module' {
             Should -Throw "Task context variable '*' not found*"
         }
 
-        It 'throws an error when context variable is not a PSCustomObject' {
+        It 'throws an error when context variable is not a TaskContext' {
             $Foo = 'NotAHashtable'
             $null = $Foo
             { Get-TaskFrameworkContext -Name 'Foo' } |
-            Should -Throw "Task context variable '*' is not a PSCustomObject*"
+            Should -Throw "Task context variable '*' is not a TaskContext*"
         }
     }
 
     Describe 'Initialize-TaskFramework' {
         It 'initializes TaskContext with expected values' {
-            $TaskContext | Should -Not -BeNullOrEmpty
-            $TaskContext.AllTasks | Should -BeOfType 'System.Collections.Specialized.OrderedDictionary'
+            $TaskContext | Should -Not -Be $null
+            $TaskContext.AllTasks | Should -Not -Be $null
             $TaskContext.AllTasks.Count | Should -Be 0
             $TaskContext.AllTasksSorted | Should -Be $true
             $TaskContext.BuildScriptPath | Should -Be $buildScript
@@ -67,16 +67,15 @@ Describe 'PSTaskFramework Module' {
         }
 
         It 'throws an error when build script path does not exist' {
-            { Initialize-TaskFramework -BuildScriptPath 'nonexistent.ps1' } | Should -Throw "Cannot find path*"
+            { Initialize-TaskFramework -BuildScriptPath 'nonexistent.ps1' } |
+            Should -Throw "The specified build script path 'nonexistent.ps1' does not exist."
         }
 
-        It 'adds default tasks by default' {
+        It 'adds no default tasks by default' {
             $TaskContext = Initialize-TaskFramework -BuildScriptPath $buildScript
 
             $tasks = $TaskContext.AllTasks
-            $tasks.Count | Should -Be 2
-            $tasks['list'] | Should -Not -BeNullOrEmpty
-            $tasks['help'] | Should -Not -BeNullOrEmpty
+            $tasks.Count | Should -Be 0
         }
 
         It 'registers TaskNameArgName and TaskArgsArgName in TaskContext' {
@@ -94,9 +93,9 @@ Describe 'PSTaskFramework Module' {
             $TaskContext.AllTasks.Count | Should -Be 1
             $TaskContext.AllTasksSorted | Should -Be $false
             $task = $TaskContext.AllTasks['foo']
-            $task | Should -Not -BeNullOrEmpty
+            $task | Should -Not -Be $null
             $task.Name | Should -Be 'foo'
-            $task.Description | Should -BeNullOrEmpty
+            $task.Description | Should -Be ''
             $task.DependsOn | Should -Be @()
             $task.Action | Should -BeOfType [scriptblock]
             $task.AllowedExitCodes | Should -Be @(0)
@@ -108,7 +107,7 @@ Describe 'PSTaskFramework Module' {
             $TaskContext.AllTasks.Count | Should -Be 1
             $TaskContext.AllTasksSorted | Should -Be $false
             $task = $TaskContext.AllTasks['beta']
-            $task | Should -Not -BeNullOrEmpty
+            $task | Should -Not -Be $null
             $task.Name | Should -Be 'beta'
             $task.Description | Should -Be 'second task'
             $task.DependsOn | Should -Be @()
@@ -122,11 +121,11 @@ Describe 'PSTaskFramework Module' {
             $TaskContext.AllTasks.Count | Should -Be 1
             $TaskContext.AllTasksSorted | Should -Be $false
             $task = $TaskContext.AllTasks['noop']
-            $task | Should -Not -BeNullOrEmpty
+            $task | Should -Not -Be $null
             $task.Name | Should -Be 'noop'
-            $task.Description | Should -BeNullOrEmpty
+            $task.Description | Should -Be ''
             $task.DependsOn | Should -Be @()
-            $task.Action | Should -BeNullOrEmpty
+            $task.Action | Should -Be $null
             $task.AllowedExitCodes | Should -Be @(0)
         }
 
@@ -136,11 +135,11 @@ Describe 'PSTaskFramework Module' {
             $TaskContext.AllTasks.Count | Should -Be 1
             $TaskContext.AllTasksSorted | Should -Be $false
             $task = $TaskContext.AllTasks['alpha']
-            $task | Should -Not -BeNullOrEmpty
+            $task | Should -Not -Be $null
             $task.Name | Should -Be 'alpha'
-            $task.Description | Should -BeNullOrEmpty
+            $task.Description | Should -Be ''
             $task.DependsOn | Should -Be @('beta')
-            $task.Action | Should -BeNullOrEmpty
+            $task.Action | Should -Not -Be $null
             $task.AllowedExitCodes | Should -Be @(0)
         }
 
@@ -150,8 +149,8 @@ Describe 'PSTaskFramework Module' {
 
             $TaskContext.AllTasks.Count | Should -Be 2
             $TaskContext.AllTasksSorted | Should -Be $false
-            $TaskContext.AllTasks['t1'] | Should -Not -BeNullOrEmpty
-            $TaskContext.AllTasks['t2'] | Should -Not -BeNullOrEmpty
+            $TaskContext.AllTasks['t1'] | Should -Not -Be $null
+            $TaskContext.AllTasks['t2'] | Should -Not -Be $null
         }
 
         It 'rejects duplicate task names case-insensitively' {
@@ -186,7 +185,7 @@ Describe 'PSTaskFramework Module' {
 
     Describe 'Invoke-TaskFramework' {
         It 'fails when no tasks are specified' {
-            { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'foo' } | Should -Throw "Task 'foo' not found."
+            { Invoke-TaskFramework -TaskName 'foo' } | Should -Throw "Task 'foo' not found."
             $global:LASTEXITCODE | Should -Be -1
         }
 
@@ -196,7 +195,7 @@ Describe 'PSTaskFramework Module' {
             Task 'alpha' -Description 'first task' -Action { $Shared.State.Add('alpha') } -DependsOn @('beta')
             Task 'beta' -Description 'second task' -Action { $Shared.State.Add('beta') }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('alpha')
+            Invoke-TaskFramework -TaskName @('alpha')
 
             $shared.State | Should -Be @('beta', 'alpha')
         }
@@ -207,7 +206,7 @@ Describe 'PSTaskFramework Module' {
             Task 'dep' { $Shared.State.Add('dep') }
             Task 'main' { $Shared.State.Add('main') } -DependsOn @('dep')
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('main')
+            Invoke-TaskFramework -TaskName @('main')
 
             $shared.State | Should -Be @('dep', 'main')
         }
@@ -218,7 +217,7 @@ Describe 'PSTaskFramework Module' {
             Task 'dep' { $Shared.State.Add('dep') }
             Task 'main' { $Shared.State.Add('main') } -DependsOn @('dep')
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('main') -SkipDependencies
+            Invoke-TaskFramework -TaskName @('main') -SkipDependencies
 
             $shared.State | Should -Be @('main')
         }
@@ -231,7 +230,7 @@ Describe 'PSTaskFramework Module' {
                 $Shared.Captured = ("{0}:{1}" -f $Name, $Count)
             }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('echo') -TaskArgs @('sample', 3)
+            Invoke-TaskFramework -TaskName @('echo') -TaskArgs @('sample', 3)
 
             $shared.Captured | Should -Be 'sample:3'
         }
@@ -240,7 +239,7 @@ Describe 'PSTaskFramework Module' {
             Task 'first' {}
             Task 'second' {}
 
-            { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('first', 'second') -TaskArgs @('x') } |
+            { Invoke-TaskFramework -TaskName @('first', 'second') -TaskArgs @('x') } |
             Should -Throw '*Task arguments cannot be used when invoking multiple tasks.*'
 
             $global:LASTEXITCODE | Should -Be -1
@@ -255,7 +254,7 @@ Describe 'PSTaskFramework Module' {
                 $Shared.Result = "$Greeting, $Name"
             }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('use-vars')
+            Invoke-TaskFramework -TaskName @('use-vars')
 
             $shared.Result | Should -Be 'hello, world'
         }
@@ -269,7 +268,7 @@ Describe 'PSTaskFramework Module' {
                 $null = $Name # avoid unused variable warning
             }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('use-vars')
+            Invoke-TaskFramework -TaskName @('use-vars')
 
             $Name | Should -Be 'outer scope'
         }
@@ -279,7 +278,7 @@ Describe 'PSTaskFramework Module' {
                 $global:LASTEXITCODE = 42
             }
 
-            { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'fails' } |
+            { Invoke-TaskFramework -TaskName 'fails' } |
             Should -Throw "Task 'fails' failed with exit code 42."
 
             $global:LASTEXITCODE | Should -Be 42
@@ -290,7 +289,7 @@ Describe 'PSTaskFramework Module' {
                 $global:LASTEXITCODE = 42
             }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'fails'
+            Invoke-TaskFramework -TaskName 'fails'
             $global:LASTEXITCODE | Should -Be 0
         }
 
@@ -299,15 +298,15 @@ Describe 'PSTaskFramework Module' {
                 $global:LASTEXITCODE = 42
             }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'fails'
+            Invoke-TaskFramework -TaskName 'fails'
             $global:LASTEXITCODE | Should -Be 0
         }
 
         It 'does not reset framework state after invocation' {
             Task 'run-once' {}
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('run-once')
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('run-once')
+            Invoke-TaskFramework -TaskName @('run-once')
+            Invoke-TaskFramework -TaskName @('run-once')
 
             $global:LASTEXITCODE | Should -Be 0
         }
@@ -315,7 +314,7 @@ Describe 'PSTaskFramework Module' {
         It 'fails when dependency is missing' {
             Task 'main' {} -DependsOn @('missing')
 
-            { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('main') } |
+            { Invoke-TaskFramework -TaskName @('main') } |
             Should -Throw "Dependency 'missing' of task 'main' not found."
 
             $global:LASTEXITCODE | Should -Be -1
@@ -325,7 +324,7 @@ Describe 'PSTaskFramework Module' {
             Task 'a' {} -DependsOn @('b')
             Task 'b' {} -DependsOn @('a')
 
-            { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('a') } |
+            { Invoke-TaskFramework -TaskName @('a') } |
             Should -Throw "Circular dependency detected at *"
 
             $global:LASTEXITCODE | Should -Be -1
@@ -337,42 +336,42 @@ Describe 'PSTaskFramework Module' {
                 $TaskContext.WorkingDirectory | Should -Be $TestDrive
                 $TaskContext.SkipDependencies | Should -Be $false
                 $TaskContext.TasksToExecute | Should -Be @('null', 'alpha', 'before', 'check')
-                $TaskContext.Start | Should -Not -BeNullOrEmpty
-                $TaskContext.Duration | Should -BeNullOrEmpty
-                $TaskContext.ExitCode | Should -BeNullOrEmpty
-                $TaskContext.CurrentTask | Should -Not -BeNullOrEmpty
+                $TaskContext.Start | Should -Not -Be $Null
+                $TaskContext.Duration | Should -Be $Null
+                $TaskContext.ExitCode | Should -Be $Null
+                $TaskContext.CurrentTask | Should -Not -Be $Null
                 $TaskContext.CurrentTask.Name | Should -Be 'alpha'
-                $TaskContext.Results['alpha'].Start | Should -Not -BeNullOrEmpty
+                $TaskContext.Results['alpha'].Start | Should -Not -Be $Null
                 $TaskContext.Results['alpha'].TaskArgs.Raw.Count | Should -Be 0
-                $TaskContext.Results['alpha'].Duration | Should -BeNullOrEmpty
-                $TaskContext.Results['alpha'].ExitCode | Should -BeNullOrEmpty
+                $TaskContext.Results['alpha'].Duration | Should -Be $Null
+                $TaskContext.Results['alpha'].ExitCode | Should -Be $Null
             }
             Task before -DependsOn alpha {
                 $TaskContext.WorkingDirectory | Should -Be $TestDrive
                 $TaskContext.SkipDependencies | Should -Be $false
                 $TaskContext.TasksToExecute | Should -Be @('null', 'alpha', 'before', 'check')
-                $TaskContext.CurrentTask | Should -Not -BeNullOrEmpty
+                $TaskContext.CurrentTask | Should -Not -Be $Null
                 $TaskContext.CurrentTask.Name | Should -Be 'before'
-                $TaskContext.Results['before'].Start | Should -Not -BeNullOrEmpty
+                $TaskContext.Results['before'].Start | Should -Not -Be $Null
                 $TaskContext.Results['before'].TaskArgs.Raw.Count | Should -Be 0
-                $TaskContext.Results['before'].Duration | Should -BeNullOrEmpty
-                $TaskContext.Results['before'].ExitCode | Should -BeNullOrEmpty
+                $TaskContext.Results['before'].Duration | Should -Be $Null
+                $TaskContext.Results['before'].ExitCode | Should -Be $Null
             }
             Task check -DependsOn before, alpha {
                 $TaskContext.WorkingDirectory | Should -Be $TestDrive
                 $TaskContext.SkipDependencies | Should -Be $false
                 $TaskContext.TasksToExecute | Should -Be @('null', 'alpha', 'before', 'check')
-                $TaskContext.CurrentTask | Should -Not -BeNullOrEmpty
+                $TaskContext.CurrentTask | Should -Not -Be $Null
                 $TaskContext.CurrentTask.Name | Should -Be 'check'
-                $TaskContext.Results['check'].Start | Should -Not -BeNullOrEmpty
+                $TaskContext.Results['check'].Start | Should -Not -Be $Null
                 $TaskContext.Results['check'].TaskArgs.Raw | Should -Be @('arg1', 'arg2')
                 $TaskContext.Results['check'].TaskArgs.Unbound | Should -Be @('arg1', 'arg2')
                 $TaskContext.Results['check'].TaskArgs.Bound.Count | Should -Be 0
-                $TaskContext.Results['check'].Duration | Should -BeNullOrEmpty
-                $TaskContext.Results['check'].ExitCode | Should -BeNullOrEmpty
+                $TaskContext.Results['check'].Duration | Should -Be $Null
+                $TaskContext.Results['check'].ExitCode | Should -Be $Null
             }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'check' -TaskArgs 'arg1', 'arg2'
+            Invoke-TaskFramework -TaskName 'check' -TaskArgs 'arg1', 'arg2'
 
             $TaskContext.Results['null'].Duration | Should -Be ([TimeSpan]::Zero)
             $TaskContext.Results['null'].ExitCode | Should -Be 0
@@ -391,9 +390,9 @@ Describe 'PSTaskFramework Module' {
                 $Global:LASTEXITCODE = 45
             }
 
-            Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'check'
+            Invoke-TaskFramework -TaskName 'check'
 
-            $TaskContext.CurrentTask | Should -BeNullOrEmpty
+            $TaskContext.CurrentTask | Should -Be $Null
             $TaskContext.Results['check'].ExitCode | Should -Be 45
         }
 
@@ -402,14 +401,14 @@ Describe 'PSTaskFramework Module' {
                 throw 'Task error'
             }
 
-            { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'check' } |
+            { Invoke-TaskFramework -TaskName 'check' } |
             Should -Throw "Task error"
 
-            $TaskContext.CurrentTask | Should -Not -BeNullOrEmpty
+            $TaskContext.CurrentTask | Should -Not -Be $Null
             $TaskContext.CurrentTask.Name | Should -Be 'check'
-            $TaskContext.Results['check'].Error | Should -Not -BeNullOrEmpty
-            $TaskContext.Results['check'].ExitCode | Should -BeNullOrEmpty
-            $TaskContext.Error | Should -Not -BeNullOrEmpty
+            $TaskContext.Results['check'].Error | Should -Not -Be $Null
+            $TaskContext.Results['check'].ExitCode | Should -Be $Null
+            $TaskContext.Error | Should -Not -Be $Null
             $TaskContext.ExitCode | Should -Be -1
         }
 
@@ -417,13 +416,13 @@ Describe 'PSTaskFramework Module' {
             Task dependency { $Global:LASTEXITCODE = 666 }
             Task check -DependsOn dependency { }
 
-            { Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'check' -TaskArgs 'arg1', 'arg2' } |
+            { Invoke-TaskFramework -TaskName 'check' } |
             Should -Throw "Task 'dependency' failed with exit code 666."
 
-            $TaskContext.CurrentTask | Should -Not -BeNullOrEmpty
+            $TaskContext.CurrentTask | Should -Not -Be $Null
             $TaskContext.CurrentTask.Name | Should -Be 'dependency'
+            $TaskContext.Results.Count | Should -Be 1
             $TaskContext.Results['dependency'].ExitCode | Should -Be 666
-            $TaskContext.Results['check'] | Should -BeNullOrEmpty
             $TaskContext.ExitCode | Should -Be 666
         }
     }
@@ -586,7 +585,7 @@ Describe 'PSTaskFramework Module' {
                     $output.AddRange(@($InputObject))
                 }
 
-                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'list'
+                Invoke-TaskFramework -TaskName 'list'
             }
 
             It 'should invoke Out-Host to display output' {
@@ -616,7 +615,7 @@ task2 described task 2       {task1}
             It 'calls Get-TaskFrameworkHelp when invoked' {
                 Add-TaskFrameworkDefaultTasks -Include 'help'
 
-                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'help' -TaskArgs @('-NoPaging')
+                Invoke-TaskFramework -TaskName 'help' -TaskArgs @('-NoPaging')
 
                 Should -Invoke Get-TaskFrameworkHelp -ModuleName PSTaskFramework -Times 1
                 Should -Invoke Out-Host -ModuleName PSTaskFramework -Times 1
@@ -627,7 +626,6 @@ task2 described task 2       {task1}
             It 'calls Get-TaskFrameworkHelp when context is customized' {
                 $TaskContext = Initialize-TaskFramework `
                     -BuildScriptPath $buildScript `
-                    -AddDefaultTasks @() `
                     -TaskNameArgName 'tName' `
                     -TaskArgsArgName 'tArgs'
 
@@ -637,7 +635,7 @@ task2 described task 2       {task1}
                 $TaskContext.TaskNameArgName | Should -Be 'tName'
                 $TaskContext.TaskArgsArgName | Should -Be 'tArgs'
 
-                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'getHelp' -TaskArgs 'list', '-full'
+                Invoke-TaskFramework -TaskName 'getHelp' -TaskArgs 'list', '-full'
 
                 Should -Invoke Get-TaskFrameworkHelp -ModuleName PSTaskFramework -Times 1 -ParameterFilter {
                     $TaskName | Should -Be 'list'
@@ -654,7 +652,7 @@ task2 described task 2       {task1}
             It 'should do nothing when invoked' {
                 Add-TaskFrameworkDefaultTasks -Include 'null'
 
-                Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName 'null'
+                Invoke-TaskFramework -TaskName 'null'
 
                 $global:LASTEXITCODE | Should -Be 0
             }

@@ -105,8 +105,9 @@ You can pass task-specific arguments using standard PowerShell syntax, with a co
    Without the `--`, PowerShell would interpret the second `-v` as a duplicate `-Verbose` argument
    instead of a task-specific argument.
 
-   > **Tip:** The `--` is only _required_ when the task-specific arguments can be confused with
-   > build script arguments. If there is no ambiguity, you can omit it.
+   > **Tip:** While the use of `--` is a best-practice in production quality scripts, it is only
+   > _required_ when the task-specific arguments can be confused with build script arguments. If
+   > there is no ambiguity, you can omit it.
 
 > **Tip:** Display the help documentation for a task using `./build.ps1 help <taskName>`. This will
 > show the task's description, syntax, and dependencies. Use `./build.ps1 help help -full` for more
@@ -163,7 +164,7 @@ The `build` task can be invoked using `./build.ps1 build`. The PSTaskFramework w
   displayed in the task listing and in the help output.
 - Tasks may depend on zero or more other tasks (`-dependsOn`), in which case the framework ensures
   dependencies execute first.
-- Task actions are PowerShell script blocks.
+- Task actions are standard PowerShell script blocks.
   - Use a `param(...)` block to define and document task-specific parameters.
   - Use comment-based help (`<#...#>`) block to document the task. This will be displayed in the
     help output.
@@ -174,28 +175,80 @@ The `build` task can be invoked using `./build.ps1 build`. The PSTaskFramework w
 
 Tasks execute in a _child scope_ of the script they are defined in (e.g. `build.ps1`). This means
 they have access to all script-scoped variables and functions, in addition to all global-scope
-variables and functions. However, because the tasks are running in a child scope, they cannot
-**assign** a new value to script-scoped variables unless they use the `$script:` scope modifier, for
-example `$script:MyVariable = 123`. Without the `$script:` modifier, a new variable named
-`MyVariable` would be created in the task's local scope, leaving the script-scoped variable
-unchanged. Similarly for global-scoped variables, tasks must use the `$global:` scope modifier to
-assign a new value.
+variables and functions.
+
+Since the tasks are running in a child scope, they cannot **assign** a new value to script-scoped
+variables unless they use the `$script:` scope modifier, for example `$script:MyVariable = 123`.
+Without the `$script:` modifier, a new variable named `MyVariable` would be created in the task's
+local scope, leaving the script-scoped variable unchanged. Use the `$global:` scope modifier for
+global-scoped variables.
 
 Note that while tasks cannot **assign** new values to script-scoped variables without the `$script:`
-modifier, they can modify the properties/elements of these variables. For example, if there is a
+modifier, they can modify the **properties/elements** of those variables. For example, if there is a
 script-scoped variable `$MyConfig` that is a hashtable, a task can modify its properties like this:
 `$MyConfig.Setting1 = 'NewValue'`. This will update the `Setting1` property of the `$MyConfig`
 hashtable in the script scope.
 
 ### Task Context
 
-Tasks have access to a `$TaskContext` hashtable containing metadata about the currently executing
-task, such as its name, description, and dependencies. It also contains a list of all tasks to be
-executed in the current run, among other data. See `Invoke-TaskFramework` for exact details.
+When you call `Initialize-TaskFramework`, it creates and returns a new TaskContext object that
+contains all information about the current execution context, including all the registered tasks,
+the currently executing task, the result of all executed tasks, and other information.
 
-Tasks can also add custom properties to the `$TaskContext` hashtable, which can then be accessed by
-other tasks in the same run. This can be useful for sharing data between tasks without using
-global/script variables.
+```powershell
+$TaskContext = Initialize-TaskFramework
+```
+
+> IMPORTANT: The TaskContext data should be stored in a variable named `$TaskContext`. If this isn't
+> possible for some reason, then you have two options:
+>
+> 1. Explicitly pass the TaskContext to every PSTaskFramework function call (e.g.
+>    `Task foo -TaskContext $MyTaskContext {...}`,
+>    `Invoke-TaskFramework -TaskContext $MyTaskContext ...`, etc).
+> 2. Tell the PSTaskFramework the name of the replacement variable when initializing the framework.
+>    For example,
+>    `$MyTaskContext = Initialize-TaskFramework -TaskContextVariableName 'MyTaskContext'`.
+
+**TaskContext Properties:**
+
+- `State` [hashtable]: A place where tasks can store arbitrary data. This can be useful for sharing
+  data between tasks without using global/script variables (although those usually work great too).
+
+- `BuildScriptPath` [FileInfo]: Information about the current build script (e.g. `build.ps1`). This
+  defaults to the script file which called `Initialize-TaskFramework`.
+
+- `AllTasks` [OrderedDictionary[string, TaskDefinition]]: An ordered dictionary of all registered
+  task definitions (name, description, dependencies, script block, etc), keyed by task name. The
+  `Task` command simply adds a new TaskDefinition to this dictionary.
+- `AllTasksSorted` [bool]: Indicates whether `AllTasks` are sorted in dependency order (`$true`) or
+  registration order (`$false`). Call `Get-TaskFrameworkTasks` to sort them in dependency order.
+  They will be in dependency order while tasks are executing.
+
+- `WorkingDirectory` [DirectoryInfo]: The directory where all tasks are executed. Defaults to the
+  build script's folder, which is usually the repository root.
+- `TasksToExecute` [string[]]: A list of the tasks that will be executed in the current run, in
+  execution order.
+- `SkipDependencies` [bool]: Whether dependencies are being skipped in the current run.
+- `Start` [datetime]: The time the current run started.
+- `Duration` [timespan]: The duration of the current run.
+- `ExitCode` [int]: The exit code of the current run.
+- `Error` [ErrorRecord]: The exception that ended the current run (if any).
+
+- `CurrentTask` [TaskDefinition]: The task definition of the currently executing task.
+- `Results` [OrderedDictionary[string, TaskResult]]: An ordered dictionary containing the result of
+  each executed task, keyed by task name. Each `TaskResult` contains the following properties:
+  - `TaskArgs` [TaskArgs]: The arguments passed to the task when it was invoked.
+    - `Raw` [object[]]: The raw list of arguments passed to the task.
+    - `Bound` [IDictionary[string, object]]: The parameter names and argument values that were
+      successfully bound to the task's parameters.
+    - `Unbound` [object[]]: The list of arguments that were not bound to specific parameters (the
+      task's `$args`).
+  - `Start` [datetime]: The time the task started.
+  - `Duration` [timespan]: The duration of the task.
+  - `ExitCode` [int]: The task's exit code.
+  - `Error` [ErrorRecord]: The exception that occurred while executing the task (if any).
+
+> **Warning:** Do not manually modify TaskContext properties (other than `State`).
 
 ### Helper Functions
 
@@ -272,15 +325,16 @@ script-scoped variables without using the `$script:` scope modifier.
 
 **Cure:** Use the `$script:` scope modifier when assigning a new value to a script-scoped variable
 within a task. For example, `$script:MyVariable = 123`. This will ensure the assignment modifies the
-variable in the script scope rather than creating a new variable in the task's local scope.
+variable in the script scope rather than creating a new/temporary variable in the task's local
+scope.
 
 ### Task arguments fail when running multiple tasks
 
-**Symptom:** You pass task-specific arguments and multiple task names in the same command.
+**Symptom:** You pass task-specific arguments and multiple task names (or zero) in the same command.
 
-**Cause:** Task-specific arguments are only supported for single-task invocations.
+**Cause:** Task-specific arguments are only supported for explicit single-task invocations.
 
-**Cure:** Run one task at a time.
+**Cure:** Run one task at a time. Use `-NoDeps` to skip dependencies when necessary.
 
 ### Task or dependency not found
 
@@ -302,10 +356,11 @@ variable in the script scope rather than creating a new variable in the task's l
 
 **Symptom:** Task fails even when the command output looks acceptable.
 
-**Cause:** Task completed with an exit code not in the task's `AllowedExitCodes`.
+**Cause:** Task completed with a non-zero exit code.
 
 **Cure:**
 
+- Use `Invoke-Shell` to run external commands. It is designed to handle this specific scenario.
 - Update the task's `-AllowedExitCodes` parameter to include the expected exit code(s). Setting it
   to an empty array (`@()`) disables exit code checking.
 - Alternatively, set `$global:LASTEXITCODE = 0` before exiting the task.
@@ -316,10 +371,9 @@ variable in the script scope rather than creating a new variable in the task's l
 
 **Cause:** CI environments are non-interactive; secret prompts are not reliable there.
 
-**Cure:**
-
-Prefer to pass secrets via environment variables, especially in CI. Only prompt for a secret value
-when the environment variable is missing.
+**Cure:** Prefer to pass secrets via environment variables, especially in CI. Only prompt for a
+secret value when the environment variable is missing. See the dotnet `push` task in the
+[examples](examples/dotnet/build.ps1#L458).
 
 ## Contributing
 
@@ -327,7 +381,9 @@ To get started, run `./build.ps1 bootstrap` (yes, we eat our own dog food here).
 install/update required tools, such as Pester and PSScriptAnalyzer.
 
 Run `./build.ps1` to execute the tests and perform static analysis. Calculate code coverage using
-`./build.ps1 test -coverage`.
+`./build.ps1 test -coverage`. Use a tool like
+[Coverage Gutters](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters)
+to visualize code coverage in your editor.
 
 If you want to understand or modify core behavior, these are the files to look at:
 
