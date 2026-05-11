@@ -30,8 +30,10 @@
     Source: http://github.com/mrfootoyou/pstaskframework
 #>
 #Requires -Version 7.4
-# spell:ignore pester,sarif,nunit,dont
+# spell:ignore dont,pester,sarif,nunit
 
+[Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedParameter', '')]
+[Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidGlobalVars', 'global:LastTaskContext')]
 [CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
@@ -57,14 +59,22 @@ param (
     [ValidateNotNull()]
     [object[]] $TaskArgs = @()
 )
-$ErrorActionPreference = 'Stop'
-$InformationPreference = 'Continue'
+# Initialize some default PowerShell preferences...
+$ErrorActionPreference = 'Stop'     # throw exception on any unhandled error
+$InformationPreference = 'Continue' # display informational messages
 
-# Define the repository root and scripts directory. All tasks will be executed in the
-# context of the repository root ($RepoRoot).
-# Assume this script is located in the repository root.
-$RepoRoot = $PSScriptRoot
+# Initialize some repository variables...
+$RepoRoot = $PSScriptRoot # assumes this script is located in the repo root
 $ScriptsDir = Convert-Path "$RepoRoot/src/scripts"
+
+# Import and initialize the PSTaskFramework...
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+$TaskContext = Initialize-TaskFramework
+
+####################################################################################
+# Define shared variables and functions...
+####################################################################################
+
 $PSModuleVersions = @{
     Pester           = '5.7.1'
     PSScriptAnalyzer = '1.25.0'
@@ -73,9 +83,14 @@ $PSModuleVersions = @{
 
 ####################################################################################
 # Define all tasks
+# - Tasks will execute in the order they are defined below, unless they have
+#   dependencies, in which case the dependencies will always be executed first.
+# - The task's working directory is the folder containing this script.
+# - Tasks can assign values to script-scope variables using the `$script:` modifier.
 ####################################################################################
-Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
-Reset-TaskFramework
+#region Task definitions
+
+# Add the default list and help tasks...
 Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
@@ -206,17 +221,8 @@ Task test -desc 'Execute tests' -dependsOn version {
         $configuration.CodeCoverage.CoveragePercentTarget = 75
     }
 
-    # Run tests within a temporary module (private session) to prevent the
-    # TaskFramework tests from clobbering the current TaskFramework state.
-    $tempModule = New-Module -ArgumentList $PSModuleVersions['Pester'] -ScriptBlock {
-        param($PesterVersion)
-        Import-Module Pester -MinimumVersion $PesterVersion
-        Export-ModuleMember -Function Invoke-Pester
-    }
-
-    Import-Module PSArgs -Verbose:$false
     Write-Host "$($PSStyle.Dim)>> Invoke-Pester -Configuration $(ConvertTo-PSString $configuration)"
-    & $tempModule Invoke-Pester -Configuration $configuration
+    Invoke-Pester -Configuration $configuration
 
     if ($TestReport -and (Test-Path $ReportPath)) {
         Write-Host "Test report: '$ReportPath'." -ForegroundColor Green
@@ -307,17 +313,16 @@ Task analysis -desc 'Execute analysis' -dependsOn version {
     Write-Host $resultMsg -ForegroundColor Green
 }
 
-##############################################################
-# Execute the specified task(s) with the Task Framework. See
-# the documentation for Invoke-TaskFramework for more details.
-##############################################################
+#endregion Task definitions
 
-$TaskContext = @{ } # contains info about the current task during execution.
+####################################################################################
+# Execute the specified task(s)...
+####################################################################################
 Invoke-TaskFramework `
     -TaskName $TaskName `
     -TaskArgs $TaskArgs `
     -SkipDependencies:$SkipDependencies `
-    -WorkingDirectory $RepoRoot `
-    -BuildScriptPath $MyInvocation.MyCommand.Path `
-    -TaskContext $TaskContext `
     -ExitOnError
+
+# Save TaskContext in a global variable so that it can be inspected
+$global:LastTaskContext = $TaskContext

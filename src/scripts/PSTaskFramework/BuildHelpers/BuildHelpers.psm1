@@ -160,12 +160,7 @@ function Invoke-Shell {
     }
 }
 
-$exportModuleMemberParams = @{
-    Function = @(
-        'Test-Administrator'
-        'Assert-AppExists'
-        'Invoke-Shell'
-    )
-}
-
-Export-ModuleMember @exportModuleMemberParams
+Export-ModuleMember -Function `
+    'Test-Administrator', `
+    'Assert-AppExists', `
+    'Invoke-Shell'

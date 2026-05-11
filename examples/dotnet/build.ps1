@@ -32,6 +32,8 @@
 #Requires -Version 7.4
 # spell:ignore dont,winget,choco,opencover,reportgenerator,reportgenerator-globaltool
 
+[Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedParameter', '')]
+[Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidGlobalVars', 'global:LastTaskContext')]
 [CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
@@ -76,24 +78,33 @@ param (
     [ValidateNotNull()]
     [object[]] $TaskArgs = @()
 )
-$ErrorActionPreference = 'Stop'
-$InformationPreference = 'Continue'
+# Initialize some default PowerShell preferences...
+$ErrorActionPreference = 'Stop'     # throw exception on any unhandled error
+$InformationPreference = 'Continue' # display informational messages
 
-# Define the repository root and scripts directory. All tasks will be executed in the
-# context of the repository root ($RepoRoot).
-# Assume this script is located in the repository root.
-$RepoRoot = $PSScriptRoot
+# Initialize some repository variables...
+$RepoRoot = $PSScriptRoot # assumes this script is located in the repo root
 $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
-# Avoid "parameter is never used" analysis warning on params that are only used in tasks.
-$null = $Configuration
-$null = $Version
+# Import and initialize the PSTaskFramework...
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+$TaskContext = Initialize-TaskFramework
+
+####################################################################################
+# Define shared variables and functions...
+####################################################################################
+
 
 ####################################################################################
 # Define all tasks
+# - Tasks will execute in the order they are defined below, unless they have
+#   dependencies, in which case the dependencies will always be executed first.
+# - The task's working directory is the folder containing this script.
+# - Tasks can assign values to script-scope variables using the `$script:` modifier.
 ####################################################################################
-Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
-Reset-TaskFramework
+#region Task definitions
+
+# Add the default list and help tasks...
 Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
@@ -102,7 +113,7 @@ Task bootstrap -desc 'Installs required tools' {
         Bootstraps the repository by installing required tools.
 
         Required tools include:
-        - Git (probably already installed, but we'll update if necessary).
+        - Git (probably already installed).
         - .NET SDK
         - Docker-API compatible container runtime for integration tests.
         - PowerShell 7.4 or later (assumed to be already be installed).
@@ -526,17 +537,16 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
     }
 }
 
-##############################################################
-# Execute the specified task(s) with the Task Framework. See
-# the documentation for Invoke-TaskFramework for more details.
-##############################################################
+#endregion Task definitions
 
-$TaskContext = @{ } # contains info about the current task during execution.
+####################################################################################
+# Execute the specified task(s)...
+####################################################################################
 Invoke-TaskFramework `
     -TaskName $TaskName `
     -TaskArgs $TaskArgs `
     -SkipDependencies:$SkipDependencies `
-    -WorkingDirectory $RepoRoot `
-    -BuildScriptPath $MyInvocation.MyCommand.Path `
-    -TaskContext $TaskContext `
     -ExitOnError
+
+# Save TaskContext in a global variable so that it can be inspected
+$global:LastTaskContext = $TaskContext
