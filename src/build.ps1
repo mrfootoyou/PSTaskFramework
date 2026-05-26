@@ -158,11 +158,14 @@ Task build -desc 'Build the project' -dependsOn version {
 ####################################################################################
 # Execute the specified task(s)...
 ####################################################################################
-Invoke-TaskFramework `
-    -TaskName $TaskName `
-    -TaskArgs $TaskArgs `
-    -SkipDependencies:$SkipDependencies `
-    -ExitOnError
-
-# Save TaskContext in a global variable so that it can be inspected
-$global:LastTaskContext = $TaskContext
+try {
+    Invoke-TaskFramework `
+        -TaskName $TaskName `
+        -TaskArgs $TaskArgs `
+        -SkipDependencies:$SkipDependencies `
+        -ExitOnError
+}
+finally {
+    # Save TaskContext in a global variable so that it can be inspected
+    $global:LastTaskContext = $TaskContext
+}

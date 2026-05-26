@@ -52,8 +52,8 @@ class TaskContext {
 
     # Execution metadata for the current run.
     [System.IO.DirectoryInfo]$WorkingDirectory
-    [string[]]$TasksToExecute = @()
     [bool]$SkipDependencies
+    [string[]]$TasksToExecute = @()
     [Nullable[DateTime]]$Start
     [Nullable[TimeSpan]]$Duration
     [Nullable[int]]$ExitCode
@@ -858,23 +858,21 @@ function Invoke-Task {
         Write-Verbose "Invoking task '$TaskName' with no arguments."
     }
 
-    # Use Invoke-Expression to parse $TaskArgs in the context of the task's action.
-    # This enables $TaskArgs to contain named arguments (i.e. '-foo','bar') not
-    # just positional arguments ('bar')...
     try {
-        $tArgs = Invoke-Expression "&{`n$($Task.Action.Ast.ParamBlock) return @{Bound=`$PSBoundParameters;Unbound=`$args}} $taskCommandArgs"
-        $result.TaskArgs.Bound = $tArgs.Bound
-        $result.TaskArgs.Unbound = $tArgs.Unbound
-    }
-    catch {
-        Repair-TaskStackTrace -ErrorRecord $_ -Task $Task -TaskActionStartLine 2
-        $result.Error = $_
-        $result.Duration = [datetime]::UtcNow - $result.Start
-        throw
-    }
+        # Use Invoke-Expression to parse $TaskArgs in the context of the task's action.
+        # This enables $TaskArgs to contain named arguments (i.e. '-foo','bar') not
+        # just positional arguments ('bar')...
+        try {
+            $tArgs = Invoke-Expression "&{`n$($Task.Action.Ast.ParamBlock) return @{Bound=`$PSBoundParameters;Unbound=`$args}} $taskCommandArgs"
+            $result.TaskArgs.Bound = $tArgs.Bound
+            $result.TaskArgs.Unbound = $tArgs.Unbound
+        }
+        catch {
+            Repair-TaskStackTrace -ErrorRecord $_ -Task $Task -TaskActionStartLine 2
+            throw
+        }
 
-    # Now invoke the task action with the parsed arguments...
-    try {
+        # Now invoke the task action with the parsed arguments...
         $bound = $result.TaskArgs.Bound
         $unbound = $result.TaskArgs.Unbound
         & $Task.Action @bound @unbound
@@ -889,7 +887,6 @@ function Invoke-Task {
 
     $result.ExitCode = $global:LASTEXITCODE
     if ($Task.AllowedExitCodes.Count -gt 0 -and $result.ExitCode -notin $Task.AllowedExitCodes) {
-        Write-Verbose "Task '$TaskName' failed with exit code $($result.ExitCode)."
         throw "Task '$TaskName' failed with exit code $($result.ExitCode)."
     }
 
@@ -903,19 +900,19 @@ function getOrderedTasks {
     <#
     .DESCRIPTION
         Returns an ordered array of TaskDefinition objects corresponding to the specified task
-        names and their dependencies (if $includeDependencies is specified). The tasks are returned
-        in dependency order. For example, if taskA depends on taskB, then `getOrderedTasks taskA $true`
-        will return an array with taskB first, followed by taskA.
+        names and their dependencies (if $TaskContext.SkipDependencies is not specified).
+        The tasks are returned in dependency order. For example, if taskA depends on taskB, then
+        `getOrderedTasks taskA` will return an array with taskB first, followed by taskA.
     .OUTPUTS
-        [TaskDefinition[]]
-        An array of TaskDefinition objects corresponding to the specified task names and their dependencies (if $includeDependencies is specified), sorted in dependency order.
+        [TaskDefinition]
+        An array of TaskDefinition objects corresponding to the specified task names and their
+        dependencies (if $TaskContext.SkipDependencies is not specified), sorted in dependency order.
     #>
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([TaskDefinition])]
     param(
         [Parameter(Mandatory, Position = 0)]
         [string[]]$TaskNames,
-        [switch]$IncludeDependencies,
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
 
@@ -935,7 +932,7 @@ function getOrderedTasks {
         if (-not $task) {
             throw "Task '$taskName' not found."
         }
-        if ($IncludeDependencies) {
+        if (-not $TaskContext.SkipDependencies) {
             foreach ($dep in $task.DependsOn) {
                 $queue.Enqueue($dep)
             }
@@ -986,66 +983,85 @@ function Invoke-TaskFramework {
     )
     & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
     $ErrorActionPreference = 'Stop'
+    $null = $ExitOnError # avoid unused parameter warning
+
+    $isInvokeTaskError = $false
+    trap {
+        if ($global:LASTEXITCODE -eq 0) { $global:LASTEXITCODE = -1 }
+        $TaskContext.ExitCode = $global:LASTEXITCODE
+        $TaskContext.Error = $_
+        Write-Verbose "Error executing task(s):`n$(($_ | Format-List -Force | Out-String).Trim())"
+
+        if ($ExitOnError) {
+            # Write a user-friendly error message...
+            $msg = "$($PSStyle.Formatting.Error)ERROR: $_"
+            if ($isInvokeTaskError) {
+                # Include a focused stack trace that only includes the stack frames above
+                # Invoke-Task, i.e., the user's code...
+                $taskStackTrace = $_.ScriptStackTrace.Split("`n").where({ $_.StartsWith('at Invoke-Task,') }, 'until')
+                if ($taskStackTrace) { $msg += "$($PSStyle.BoldOff)$($PSStyle.Dim)`n$($taskStackTrace -join "`n")$($PSStyle.DimOff)" }
+            }
+            Write-Host "$msg$($PSStyle.Reset)"
+            Write-Verbose "Exiting with code $global:LASTEXITCODE."
+            exit $global:LASTEXITCODE
+        }
+
+        break # rethrow the error as an exception failure
+    }
 
     if (!$WorkingDirectory) {
         $WorkingDirectory = $TaskContext.BuildScriptPath.DirectoryName
     }
     elseif (!(Test-Path $WorkingDirectory -PathType Container)) {
-        Write-Error -Exception "The specified working directory '$WorkingDirectory' does not exist."
-        return
+        throw "The specified working directory '$WorkingDirectory' does not exist."
+    }
+    if ($TaskArgs.Count -gt 0 -and $TaskName.Count -gt 1) {
+        throw 'Task arguments cannot be used when invoking multiple tasks.'
     }
 
     $TaskContext.WorkingDirectory = Get-Item $WorkingDirectory -Force
     $TaskContext.SkipDependencies = $SkipDependencies.IsPresent
+    $TaskContext.TasksToExecute = @()
     $TaskContext.Start = [datetime]::UtcNow
+    $TaskContext.Duration = $null
+    $TaskContext.ExitCode = $null
+    $TaskContext.Error = $null
+    $TaskContext.CurrentTask = $null
+    $TaskContext.Results = [ordered]@{}
 
-    $orig = @{
-        PSModulePath = $env:PSModulePath
-        Location     = Get-Location
-    }
+    $tasksToExecute = getOrderedTasks $TaskName -TaskContext $TaskContext
+    $TaskContext.TasksToExecute = $tasksToExecute.Name
 
-    Write-Verbose "Working directory: '$($TaskContext.WorkingDirectory)'."
-    Set-Location $TaskContext.WorkingDirectory
+    $origPSModulePath = $env:PSModulePath
+    $origLocation = Get-Location
+
     try {
-        if ($TaskArgs.Count -gt 0 -and $TaskName.Count -gt 1) {
-            throw 'Task arguments cannot be used when invoking multiple tasks.'
-        }
-
         # Add this scripts directory to the module path so that task actions
         # can import our helper modules using the module's folder name.
         $pathSeparator = $IsWindows ? ';' : ':'
         $env:PSModulePath = "$PSScriptRoot$pathSeparator$env:PSModulePath"
-
-        $tasksToExecute = getOrderedTasks $TaskName -IncludeDependencies:(!$TaskContext.SkipDependencies) -TaskContext $TaskContext
-        $TaskContext.TasksToExecute = $tasksToExecute
-        Write-Verbose "Executing tasks: $($tasksToExecute.Name -join ', ')"
+        Write-Verbose "Prepended '$PSScriptRoot' to `$env:PSModulePath."
+        Write-Verbose "Working directory: '$($TaskContext.WorkingDirectory)'."
+        Write-Verbose "Executing tasks: $($TaskContext.TasksToExecute -join ', ')"
 
         foreach ($task in $tasksToExecute) {
-            Invoke-Task -Task $task -TaskArgs ($task.Name -eq $TaskName ? $TaskArgs : @()) -TaskContext $TaskContext
             Set-Location $TaskContext.WorkingDirectory
+            try {
+                Invoke-Task -Task $task -TaskArgs ($task.Name -eq $TaskName ? $TaskArgs : @()) -TaskContext $TaskContext
+            }
+            catch {
+                $isInvokeTaskError = $true
+                throw # rethrow to be caught by the trap
+            }
         }
 
         Write-Verbose "Done executing tasks."
         $TaskContext.ExitCode = $global:LASTEXITCODE
     }
-    catch {
-        if ($global:LASTEXITCODE -eq 0) { $global:LASTEXITCODE = -1 }
-        $TaskContext.ExitCode = $global:LASTEXITCODE
-        $TaskContext.Error = $_
-
-        Write-Verbose "Error: $_`n$(($_ | Format-List -Force | Out-String).Trim())"
-        if ($ExitOnError) {
-            # Output a user-friendly error message with a stack trace
-            Write-Host "Error: $_`n$($_.Exception.GetType().FullName)`n$($_.ScriptStackTrace)" -ForegroundColor Red
-            Write-Verbose "Exiting with code $global:LASTEXITCODE."
-            exit $global:LASTEXITCODE
-        }
-        throw
-    }
     finally {
         $TaskContext.Duration = [datetime]::UtcNow - $TaskContext.Start
-        $env:PSModulePath = $orig.PSModulePath
-        Set-Location $orig.Location
+        $env:PSModulePath = $origPSModulePath
+        Set-Location $origLocation
     }
 }
 
