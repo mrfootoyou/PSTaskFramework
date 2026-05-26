@@ -14,6 +14,8 @@ param()
 Import-Module "$PSScriptRoot/../Secrets" -Verbose:$false
 Import-Module "$PSScriptRoot/../PSArgs" -Verbose:$false
 
+. "$PSScriptRoot/dotEnv.ps1"
+
 # Mockable functions for testing purposes. These are not intended to be used directly.
 function getUserId {
     id -u
@@ -160,7 +162,9 @@ function Invoke-Shell {
     }
 }
 
-Export-ModuleMember -Function `
-    'Test-Administrator', `
-    'Assert-AppExists', `
+Export-ModuleMember -Function @(
+    'Test-Administrator'
+    'Assert-AppExists'
     'Invoke-Shell'
+    'Import-DotEnv'
+)
