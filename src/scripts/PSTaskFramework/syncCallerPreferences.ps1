@@ -49,7 +49,9 @@ if (!$Invocation) {
 $boundParameters = $Invocation.BoundParameters
 $callerModule = $Invocation.MyCommand.Module
 if ($null -eq $callerModule) {
-    throw 'Invocation must be from a script module.'
+    # Caller is not a script module, so we can't sync preferences.
+    # throw 'Invocation must be from a script module.'
+    return
 }
 
 @(
