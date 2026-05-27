@@ -36,8 +36,7 @@ Install PowerShell: [https://aka.ms/install-powershell](https://aka.ms/install-p
 
 ### Copy the Framework into Your Repo
 
-Copy everything from the [`src`](src/) folder into the **root** of your repository. You may omit the
-test files.
+Copy everything from the [`src`](src/) folder into the **root** of your repository.
 
 Your repo structure should look something like this:
 
@@ -46,8 +45,7 @@ Your repo structure should look something like this:
 ├── build.ps1  <== the entrypoint
 └── scripts/
     └── PSTaskFramework/  <== the framework
-        ├── ...
-        └── <test files can be omitted>
+        └── ...
 ```
 
 > **NOTE:** The `PSTaskFramework` folder can be located elsewhere if desired, just update the
