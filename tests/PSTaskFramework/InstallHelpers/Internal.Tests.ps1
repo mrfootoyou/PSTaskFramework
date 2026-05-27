@@ -1,6 +1,6 @@
 <#
 .DESCRIPTION
-    Unit tests for InstallHelpers module.
+    Unit tests for InstallHelpers internal functions.
 .NOTES
     SPDX-License-Identifier: Unlicense
     Source: http://github.com/mrfootoyou/pstaskframework
@@ -16,7 +16,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
         $ErrorActionPreference = 'Stop'
         $global:LASTEXITCODE = 0
 
-        Import-Module "$PSScriptRoot/InstallHelpers" -Scope Local -Verbose:$false
+        Import-Module "$PSScriptRoot/../../../src/scripts/PSTaskFramework/InstallHelpers/InstallHelpers" -Scope Local -Verbose:$false
 
         # Mock Install-Module to prevent actual module installation in a poorly written test.
         Mock Install-Module -ModuleName InstallHelpers {
@@ -35,209 +35,6 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
     AfterEach {
         # Restore original PATH after each test
         $env:PATH = $script:originalPath
-    }
-
-    Context 'Get-PackageManager' {
-        It 'returns supported package managers for current platform with AllSupported' {
-            $expected = @(
-                if ($IsWindows) { 'winget'; 'choco' }
-                if ($IsLinux) { 'apt'; 'dnf'; 'brew', 'brew:linux' }
-                if ($IsMacOS) { 'brew', 'brew:macos' }
-            )
-
-            $result = @(Get-PackageManager -AllSupported)
-
-            $result | Should -Be $expected
-        }
-
-        It 'returns only detected package managers when AllSupported is not specified' {
-            Mock Get-Command -ModuleName InstallHelpers {
-                param($Name)
-                if ($Name -in @('winget', 'brew')) {
-                    [PSCustomObject]@{ Name = $Name }
-                }
-            }
-
-            $result = @(Get-PackageManager)
-
-            if ($IsWindows) {
-                $result | Should -Be @('winget')
-                $result | Should -Not -Contain 'brew'
-            }
-            if ($IsLinux) {
-                $result | Should -Contain 'brew'
-                $result | Should -Contain 'brew:linux'
-                $result | Should -Not -Contain 'winget'
-            }
-            if ($IsMacOS) {
-                $result | Should -Contain 'brew'
-                $result | Should -Contain 'brew:macos'
-                $result | Should -Not -Contain 'winget'
-            }
-        }
-    }
-
-    Context 'Get-WellKnownAppInfo' {
-        It 'returns all app info by default' {
-            $result = Get-WellKnownAppInfo
-
-            $result.Count | Should -BeGreaterThan 1
-            $result.Name | Should -Contain 'dotnet-sdk-10'
-            $result.Name | Should -Contain 'git'
-            $result.Name | Should -Contain 'docker'
-        }
-
-        It 'returns app metadata for an exact app name' {
-            $result = Get-WellKnownAppInfo -Name 'git'
-
-            $result.Name | Should -BeExactly 'git'
-            $result.Info | Should -BeOfType ([System.Collections.IDictionary])
-            $result.Info['winget'] | Should -BeExactly 'Git.Git'
-        }
-
-        It 'supports wildcard app name lookup' {
-            $result = @(Get-WellKnownAppInfo -Name 'dotnet*')
-
-            $result.Count | Should -Be 1
-            $result[0].Name | Should -BeExactly 'dotnet-sdk-10'
-        }
-
-        It 'throws for unknown app names with ErrorAction Stop' {
-            { Get-WellKnownAppInfo -Name 'not-a-real-app' -ErrorAction Stop } | `
-                Should -Throw "*not-a-real-app*not a well-known app*"
-        }
-
-        It 'does not throw for unknown wildcard' {
-            $result = Get-WellKnownAppInfo -Name 'not-a-real-app*' -ErrorAction Stop
-
-            $result | Should -BeNullOrEmpty
-        }
-    }
-
-    Context 'Install-PackageManager' {
-        It 'installs explicit package manager and returns its name' {
-            Mock installWinget -ModuleName InstallHelpers { }
-
-            $result = @(Install-PackageManager -PackageManager 'winget')
-
-            $result | Should -Contain 'winget'
-            Should -Invoke installWinget -ModuleName InstallHelpers -Times 1 -Exactly
-        }
-
-        It 'tries alternates for any and succeeds when a later manager installs' {
-            Mock Get-PackageManager -ModuleName InstallHelpers -ParameterFilter { $AllSupported } {
-                @('winget', 'choco')
-            }
-
-            Mock installWinget -ModuleName InstallHelpers {
-                throw 'winget failed'
-            }
-
-            Mock installChocolatey -ModuleName InstallHelpers { }
-
-            $result = @(
-                Install-PackageManager -PackageManager 'any' `
-                    -ErrorAction SilentlyContinue `
-                    -WarningAction SilentlyContinue `
-                    -WarningVariable installWarnings
-            )
-            $warningMessages = @($installWarnings).Message
-
-            $result | Should -Contain 'choco'
-            Should -Invoke installWinget -ModuleName InstallHelpers -Times 1 -Exactly
-            Should -Invoke installChocolatey -ModuleName InstallHelpers -Times 1 -Exactly
-            $warningMessages | Should -Contain 'winget failed'
-        }
-
-        It 'writes an error when any cannot install any supported package manager' {
-            Mock Get-PackageManager -ModuleName InstallHelpers -ParameterFilter { $AllSupported } {
-                @('winget', 'choco')
-            }
-
-            Mock installWinget -ModuleName InstallHelpers {
-                throw 'winget failed'
-            }
-
-            Mock installChocolatey -ModuleName InstallHelpers {
-                throw 'choco failed'
-            }
-
-            Mock Write-Error -ModuleName InstallHelpers { }
-
-            $null = Install-PackageManager -PackageManager 'any' `
-                -ErrorAction SilentlyContinue `
-                -WarningAction SilentlyContinue `
-                -WarningVariable installWarnings
-            $warningMessages = @($installWarnings).Message
-
-            Should -Invoke Write-Error -ModuleName InstallHelpers -Times 1
-            $warningMessages | Should -Contain 'winget failed'
-            $warningMessages | Should -Contain 'choco failed'
-        }
-    }
-
-    Context 'Install-RequiredApp' {
-        It 'throws when no install information exists for an app' {
-            { Install-RequiredApp -AppsToInstall @{ 'missing-app' = $null } } |
-            Should -Throw '*No install information found for*'
-        }
-
-        It 'skips installation for apps that are already up to date' {
-            Mock installWithWinget -ModuleName InstallHelpers { }
-
-            $apps = [ordered]@{
-                'mytool' = [ordered]@{
-                    executable = ''
-                    version    = '1.2.3'
-                    isUpToDate = { $true }
-                    winget     = 'Contoso.MyTool'
-                }
-            }
-
-            Install-RequiredApp -AppsToInstall $apps
-
-            Should -Invoke installWithWinget -ModuleName InstallHelpers -Times 0 -Exactly
-        }
-
-        It 'uses ordered app method precedence over package manager discovery order' {
-            Mock Get-PackageManager -ModuleName InstallHelpers {
-                @('winget', 'choco')
-            }
-
-            Mock installWithWinget -ModuleName InstallHelpers { }
-            Mock installWithChocolatey -ModuleName InstallHelpers { }
-
-            $apps = [ordered]@{
-                'mytool' = [ordered]@{
-                    executable = ''
-                    isUpToDate = { $false }
-                    choco      = 'mytool'
-                    winget     = 'Contoso.MyTool'
-                }
-            }
-
-            Install-RequiredApp -AppsToInstall $apps
-
-            Should -Invoke installWithChocolatey -ModuleName InstallHelpers -Times 1 -Exactly
-            Should -Invoke installWithWinget -ModuleName InstallHelpers -Times 0 -Exactly
-        }
-
-        It 'writes an error when no supported installation method is available' {
-            Mock Get-PackageManager -ModuleName InstallHelpers { @('winget') }
-            Mock Write-Error -ModuleName InstallHelpers { }
-
-            $apps = [ordered]@{
-                'mytool' = [ordered]@{
-                    executable = ''
-                    isUpToDate = { $false }
-                    custom     = 'value'
-                }
-            }
-
-            Install-RequiredApp -AppsToInstall $apps -ErrorAction SilentlyContinue
-
-            Should -Invoke Write-Error -ModuleName InstallHelpers -Times 1
-        }
     }
 
     Context 'Internal helper functions' {
@@ -877,47 +674,6 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $env:PATH -split ';' | Should -Not -Contain $TestDrive
             }
-        }
-    }
-
-    Context 'Install-PowerShellModule' {
-        It 'does not install modules that already satisfy minimum version' {
-            Mock Get-Module -ModuleName InstallHelpers {
-                [PSCustomObject]@{ Version = [version]'5.2.0' }
-            }
-
-            Mock Install-Module -ModuleName InstallHelpers { }
-
-            Install-PowerShellModule -ModuleVersions @{ Pester = [version]'5.1.0' }
-
-            Should -Invoke Install-Module -ModuleName InstallHelpers -Times 0 -Exactly
-        }
-
-        It 'installs modules when minimum version is missing' {
-            $script:getModuleCallCount = 0
-
-            Mock Get-Module -ModuleName InstallHelpers {
-                $script:getModuleCallCount++
-                if ($script:getModuleCallCount -ge 2) {
-                    [PSCustomObject]@{ Version = [version]'5.1.0' }
-                }
-            }
-
-            Mock Install-Module -ModuleName InstallHelpers { }
-
-            Install-PowerShellModule -ModuleVersions @{ Pester = [version]'5.1.0' }
-
-            Should -Invoke Install-Module -ModuleName InstallHelpers -Times 1 -Exactly
-        }
-
-        It 'writes an error when installation does not produce required version' {
-            Mock Get-Module -ModuleName InstallHelpers { $null }
-            Mock Install-Module -ModuleName InstallHelpers { }
-            Mock Write-Error -ModuleName InstallHelpers { }
-
-            Install-PowerShellModule -ModuleVersions @{ Pester = [version]'5.1.0' } -ErrorAction SilentlyContinue
-
-            Should -Invoke Write-Error -ModuleName InstallHelpers -Times 1
         }
     }
 }

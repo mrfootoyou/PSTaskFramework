@@ -15,7 +15,7 @@ Describe 'PSTaskFramework.PSArgs Module' {
         $ErrorActionPreference = 'Stop'
         $global:LASTEXITCODE = 0
 
-        Import-Module "$PSScriptRoot/PSArgs" -Verbose:$false
+        Import-Module "$PSScriptRoot/../../../src/scripts/PSTaskFramework/PSArgs/PSArgs" -Verbose:$false
 
         # Mock Write-Information and Write-Verbose to prevent test output pollution.
         Mock Write-Information -ModuleName PSArgs { }

@@ -196,7 +196,7 @@ Task test -desc 'Execute tests' -dependsOn version {
     # $configuration = New-PesterConfiguration
     $configuration = @{}
     $configuration.Run = @{}
-    $configuration.Run.Path = $ScriptsDir # excludes build.ps1
+    $configuration.Run.Path = "$RepoRoot/tests"
     $configuration.Run.PassThru = $PassThru.IsPresent
     $configuration.Output = @{}
     $configuration.Output.Verbosity = $Verbose ? 'Detailed' : 'Normal'
@@ -215,6 +215,7 @@ Task test -desc 'Execute tests' -dependsOn version {
     if ($CoverageReport) {
         Remove-Item $CoverageOutputPath -ErrorAction Ignore
         $configuration.CodeCoverage = @{}
+        $configuration.CodeCoverage.Path = "$RepoRoot/src"
         $configuration.CodeCoverage.Enabled = $true
         $configuration.CodeCoverage.OutputPath = $CoverageOutputPath
         $configuration.CodeCoverage.OutputFormat = 'Cobertura'

@@ -14,7 +14,7 @@ Describe 'PSTaskFramework.BuildHelpers Module' {
         $ErrorActionPreference = 'Stop'
         $global:LASTEXITCODE = 0
 
-        Import-Module "$PSScriptRoot/BuildHelpers" -Scope Local -Verbose:$false
+        Import-Module "$PSScriptRoot/../../../src/scripts/PSTaskFramework/BuildHelpers/BuildHelpers" -Scope Local -Verbose:$false
 
         # Mock Write-Information and Write-Verbose to prevent test output pollution.
         Mock Write-Information -ModuleName BuildHelpers { }
