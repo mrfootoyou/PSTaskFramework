@@ -35,11 +35,6 @@
 
     # Modules to import as nested modules of the module specified in RootModule
     NestedModules        = @(
-        # dependencies...
-        '../BuildHelpers/BuildHelpers.psd1'
-        '../PSArgs/PSArgs.psd1'
-        '../Secrets/Secrets.psd1'
-        # implementation...
         'WellKnownApps.ps1'
         'Get-WellKnownAppInfo.ps1'
         'Install-PackageManager.ps1'

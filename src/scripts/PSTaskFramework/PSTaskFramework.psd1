@@ -76,9 +76,9 @@
 
     # Modules that must be imported into the global environment prior to importing this module
     RequiredModules      = @(
-        './BuildHelpers/BuildHelpers.psd1'
-        './Secrets/Secrets.psd1'
-        './PSArgs/PSArgs.psd1'
+        '.\BuildHelpers\BuildHelpers.psd1'
+        '.\Secrets\Secrets.psd1'
+        '.\PSArgs\PSArgs.psd1'
     )
 
     # Assemblies that must be loaded prior to importing this module

@@ -10,6 +10,10 @@
 
 param()
 
+Import-Module "$PSScriptRoot/../BuildHelpers" -Verbose:$false
+Import-Module "$PSScriptRoot/../PSArgs" -Verbose:$false
+Import-Module "$PSScriptRoot/../Secrets" -Verbose:$false
+
 function installWithPackageManager {
     param(
         # A list of apps to install using the specified package manager. Each has the app name

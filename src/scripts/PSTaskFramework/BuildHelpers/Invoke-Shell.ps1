@@ -9,6 +9,9 @@
 
 param()
 
+Import-Module "$PSScriptRoot/../PSArgs" -Verbose:$false
+Import-Module "$PSScriptRoot/../Secrets" -Verbose:$false
+
 function Invoke-Shell {
     <#
     .SYNOPSIS

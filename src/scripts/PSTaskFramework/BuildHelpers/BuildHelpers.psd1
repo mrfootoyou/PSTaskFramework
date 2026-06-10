@@ -35,10 +35,6 @@
 
     # Modules to import as nested modules of the module specified in RootModule
     NestedModules        = @(
-        # dependencies...
-        '../Secrets/Secrets.psd1'
-        '../PSArgs/PSArgs.psd1'
-        # implementation...
         'Test-Administrator.ps1'
         'Assert-AppExists.ps1'
         'Invoke-Shell.ps1'

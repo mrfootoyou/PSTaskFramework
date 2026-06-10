@@ -9,6 +9,10 @@
 
 param()
 
+# Read-Secret needs BuildHelpers/Read-Input. Import source file instead of module to
+# avoids a circular module dependency between BuildHelpers and Secrets.
+. "$PSScriptRoot\..\BuildHelpers\Read-Input.ps1"
+
 function Read-Secret {
     <#
     .DESCRIPTION
