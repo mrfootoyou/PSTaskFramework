@@ -43,6 +43,7 @@
         'Assert-AppExists.ps1'
         'Invoke-Shell.ps1'
         'Import-DotEnv.ps1'
+        'Read-Input.ps1'
     )
 
     # Modules that must be imported into the global environment prior to importing this module
@@ -66,6 +67,7 @@
         'Assert-AppExists'
         'Invoke-Shell'
         'Import-DotEnv'
+        'Read-Input'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.

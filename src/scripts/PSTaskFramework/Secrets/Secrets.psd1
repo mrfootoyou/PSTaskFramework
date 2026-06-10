@@ -36,6 +36,9 @@
     # Modules to import as nested modules of the module specified in RootModule
     NestedModules        = @(
         'Read-Secret.ps1'
+        # Read-Secret needs BuildHelpers/Read-Input. Import source file instead of module to
+        # avoids a circular module dependency between BuildHelpers and Secrets.
+        '../BuildHelpers/Read-Input.ps1'
     )
 
     # Modules that must be imported into the global environment prior to importing this module
