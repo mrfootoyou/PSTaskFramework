@@ -12,7 +12,7 @@ param()
 Describe 'PSTaskFramework Module' {
     . "$PSScriptRoot/setup.ps1"
 
-    Describe 'Initialize-TaskFramework' {
+    Context 'Initialize-TaskFramework' {
         It 'initializes TaskContext with expected values' {
             $TaskContext | Should -Not -Be $null
             $TaskContext.AllTasks | Should -Not -Be $null

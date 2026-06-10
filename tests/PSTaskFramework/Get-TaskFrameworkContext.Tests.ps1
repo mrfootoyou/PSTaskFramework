@@ -12,7 +12,7 @@ param()
 Describe 'PSTaskFramework Module' {
     . "$PSScriptRoot/setup.ps1"
 
-    Describe 'Get-TaskFrameworkContext' {
+    Context 'Get-TaskFrameworkContext' {
         It 'returns the current TaskContext' {
             $context = Get-TaskFrameworkContext
             $context | Should -Be $TaskContext

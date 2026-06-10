@@ -12,7 +12,7 @@ param()
 Describe 'PSTaskFramework Module' {
     . "$PSScriptRoot/setup.ps1"
 
-    Describe 'Get-TaskFrameworkTasks' {
+    Context 'Get-TaskFrameworkTasks' {
         It 'returns all registered tasks' {
             Task t1 { }
             Task t2 { }

@@ -385,19 +385,19 @@ to visualize code coverage in your editor.
 
 If you want to understand or modify core behavior, these are the files to look at:
 
-- [`src/scripts/PSTaskFramework/PSTaskFramework.psm1`](src/scripts/PSTaskFramework/PSTaskFramework.psm1)
+- [`src/scripts/PSTaskFramework/`](src/scripts/PSTaskFramework/)
   - Task registration
   - Dependency ordering
   - Default tasks
   - Core execution engine
-- [`src/scripts/PSTaskFramework/BuildHelpers/BuildHelpers.psm1`](src/scripts/PSTaskFramework/BuildHelpers/BuildHelpers.psm1)
+- [`src/scripts/PSTaskFramework/BuildHelpers/`](src/scripts/PSTaskFramework/BuildHelpers/)
   - Helpers related to execution
-- [`src/scripts/PSTaskFramework/PSArgs/PSArgs.psm1`](src/scripts/PSTaskFramework/PSArgs/PSArgs.psm1)
+- [`src/scripts/PSTaskFramework/PSArgs/`](src/scripts/PSTaskFramework/PSArgs/)
   - PowerShell argument conversion helpers
-- [`src/scripts/PSTaskFramework/Secrets/Secrets.psm1`](src/scripts/PSTaskFramework/Secrets/Secrets.psm1)
+- [`src/scripts/PSTaskFramework/Secrets/`](src/scripts/PSTaskFramework/Secrets/)
   - CI-aware secret input
   - Secret masking
-- [`src/scripts/PSTaskFramework/InstallHelpers/InstallHelpers.psm1`](src/scripts/PSTaskFramework/InstallHelpers/InstallHelpers.psm1)
+- [`src/scripts/PSTaskFramework/InstallHelpers/`](src/scripts/PSTaskFramework/InstallHelpers/)
   - Application installation helpers
   - PowerShell module installation helpers
 

@@ -12,7 +12,7 @@ param()
 Describe 'PSTaskFramework Module' {
     . "$PSScriptRoot/setup.ps1"
 
-    Describe 'Task command' {
+    Context 'Task command' {
         It 'registers simple Task' {
             Task 'foo' { }
 

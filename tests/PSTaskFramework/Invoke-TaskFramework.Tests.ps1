@@ -12,7 +12,7 @@ param()
 Describe 'PSTaskFramework Module' {
     . "$PSScriptRoot/setup.ps1"
 
-    Describe 'Invoke-TaskFramework' {
+    Context 'Invoke-TaskFramework' {
         It 'fails when no tasks are specified' {
             { Invoke-TaskFramework -TaskName 'foo' } | Should -Throw "Task 'foo' not found."
             $global:LASTEXITCODE | Should -Be -1

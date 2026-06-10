@@ -12,7 +12,7 @@ param()
 Describe 'PSTaskFramework Module' {
     . "$PSScriptRoot/setup.ps1"
 
-    Describe 'Add-TaskFrameworkDefaultTasks' {
+    Context 'Add-TaskFrameworkDefaultTasks' {
         It 'adds list and help tasks by default' {
             Add-TaskFrameworkDefaultTasks
 
@@ -64,7 +64,7 @@ Describe 'PSTaskFramework Module' {
             $tasks.Name | Should -Contain 'list'
         }
 
-        Describe 'default "list" task' {
+        Context 'default "list" task' {
             BeforeEach {
                 Task 'task2' -Description 'described task 2' -DependsOn 'task1' {}
                 Task 'task1' -Description 'described task 1' -DependsOn 'list' {}
@@ -94,7 +94,7 @@ task2 described task 2       {task1}
             }
         }
 
-        Describe 'default "help" task' {
+        Context 'default "help" task' {
             BeforeEach {
                 Mock Get-TaskFrameworkHelp -ModuleName PSTaskFramework { 'mocked help' }
                 Mock Out-Host -ModuleName PSTaskFramework {}
@@ -138,7 +138,7 @@ task2 described task 2       {task1}
             }
         }
 
-        Describe 'default "null" task' {
+        Context 'default "null" task' {
             It 'should do nothing when invoked' {
                 Add-TaskFrameworkDefaultTasks -Include 'null'
 

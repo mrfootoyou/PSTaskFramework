@@ -1,6 +1,6 @@
 <#
-.DESCRIPTION
-    Helpers for loading .env files.
+.SYNOPSIS
+    Part of the PSTaskFramework.
 .NOTES
     SPDX-License-Identifier: Unlicense
     Source: http://github.com/mrfootoyou/pstaskframework

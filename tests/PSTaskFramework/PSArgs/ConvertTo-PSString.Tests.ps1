@@ -11,16 +11,7 @@
 param()
 
 Describe 'PSTaskFramework.PSArgs Module' {
-    BeforeAll {
-        $ErrorActionPreference = 'Stop'
-        $global:LASTEXITCODE = 0
-
-        Import-Module "$PSScriptRoot/../../../src/scripts/PSTaskFramework/PSArgs/PSArgs" -Verbose:$false
-
-        # Mock Write-Information and Write-Verbose to prevent test output pollution.
-        Mock Write-Information -ModuleName PSArgs { }
-        Mock Write-Verbose -ModuleName PSArgs { }
-    }
+    . "$PSScriptRoot/setup.ps1"
 
     Context 'ConvertTo-PSString' {
         It 'converts null to a null literal' {
@@ -98,38 +89,6 @@ Describe 'PSTaskFramework.PSArgs Module' {
             $result = { Get-Date } | ConvertTo-PSString
 
             $result | Should -BeExactly '{ Get-Date }'
-        }
-    }
-
-    Context 'ConvertTo-CommandArg' {
-        It 'returns an empty string for null input' {
-            $result = $null | ConvertTo-CommandArg
-
-            $result | Should -BeExactly ''
-        }
-
-        It 'converts arrays into space-separated arguments' {
-            $result = ConvertTo-CommandArg -InputObject @('alpha', 'beta value', 42)
-
-            $result | Should -BeExactly "alpha 'beta value' 42"
-        }
-
-        It 'converts dictionaries into named arguments' {
-            $result = ([ordered]@{ Name = 'value with space'; Count = 2 }) | ConvertTo-CommandArg
-
-            $result | Should -BeExactly "-Name:'value with space' -Count:2"
-        }
-
-        It 'converts PSCustomObject into named arguments' {
-            $result = ([pscustomobject]@{ Name = 'value with space'; Enabled = $true }) | ConvertTo-CommandArg
-
-            $result | Should -BeExactly "-Name:'value with space' -Enabled:`$True"
-        }
-
-        It 'converts single scalar values to argument strings' {
-            $result = 'value with space' | ConvertTo-CommandArg
-
-            $result | Should -BeExactly "'value with space'"
         }
     }
 }

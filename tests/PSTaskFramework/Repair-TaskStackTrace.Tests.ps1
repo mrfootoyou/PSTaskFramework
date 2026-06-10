@@ -12,7 +12,7 @@ param()
 Describe 'PSTaskFramework Module' {
     . "$PSScriptRoot/setup.ps1"
 
-    Describe 'Repair-TaskStackTrace' {
+    Context 'Repair-TaskStackTrace' {
         It 'rewrites task frame and removes the wrapper line-1 frame' {
             $nl = [System.Environment]::NewLine
             $fakeStack = @(
@@ -23,7 +23,7 @@ Describe 'PSTaskFramework Module' {
                 'at <ScriptBlock>, F:\test\build.ps1: line 20'
             ) -join $nl
 
-            $trace = InModuleScope PSTaskFramework -ArgumentList $fakeStack {
+            $trace = InModuleScope 'PSTaskFramework' -ArgumentList $fakeStack {
                 param($fakeStack)
                 $exception = [System.Exception]::new('task error')
                 $errorRecord = [System.Management.Automation.ErrorRecord]::new(
@@ -58,7 +58,7 @@ Describe 'PSTaskFramework Module' {
                 'at Invoke-Task, F:\test\PSTaskFramework.psm1: line 264'
             ) -join $nl
 
-            $trace = InModuleScope PSTaskFramework -ArgumentList $fakeStack {
+            $trace = InModuleScope 'PSTaskFramework' -ArgumentList $fakeStack {
                 param($fakeStack)
                 $exception = [System.Exception]::new('task error')
                 $errorRecord = [System.Management.Automation.ErrorRecord]::new(
@@ -89,7 +89,7 @@ Describe 'PSTaskFramework Module' {
                 'at <ScriptBlock>, F:\test\build.ps1: line 20'
             ) -join $nl
 
-            $trace = InModuleScope PSTaskFramework -ArgumentList $fakeStack {
+            $trace = InModuleScope 'PSTaskFramework' -ArgumentList $fakeStack {
                 param($fakeStack)
                 $exception = [System.Exception]::new('task error')
                 $errorRecord = [System.Management.Automation.ErrorRecord]::new(

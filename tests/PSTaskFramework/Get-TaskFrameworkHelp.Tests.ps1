@@ -12,7 +12,7 @@ param()
 Describe 'PSTaskFramework Module' {
     . "$PSScriptRoot/setup.ps1"
 
-    Describe 'Get-TaskFrameworkHelp' {
+    Context 'Get-TaskFrameworkHelp' {
         BeforeEach {
             # Minimal build script with the parameters Get-TaskFrameworkHelp needs to merge help from.
             Set-Content -Path $buildScript -Value @'
