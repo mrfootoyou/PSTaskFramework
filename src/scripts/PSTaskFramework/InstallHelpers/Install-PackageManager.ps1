@@ -189,7 +189,6 @@ function Install-PackageManager {
         [ValidateSet('any', 'winget', 'choco', 'apt', 'dnf', 'brew', 'brew:linux', 'brew:macos')]
         [string[]] $PackageManager
     )
-
     Sync-CallerPreference
 
     $PackageManager = @(

@@ -34,5 +34,5 @@ function Read-Secret {
         [switch] $AllowEmpty
     )
     Sync-CallerPreference
-    readInput -Secret @PSBoundParameters
+    Read-Input -Secret @PSBoundParameters
 }

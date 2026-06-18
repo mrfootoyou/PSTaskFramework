@@ -28,8 +28,9 @@ function Sync-CallerPreference {
 
         !IMPORTANT USAGE NOTES!
 
-        - This function MUST only be called from module entry-points. An [ignorable] error will
-          occur if called from any other context.
+        - This function SHOULD only be called from module entry-points. If called from any other
+          context the function will do nothing unless -FailIfNotAnEntryPoint is specified, in which
+          case an exception will be thrown.
 
         - This function MUST NOT be exported from a module. Doing so will result in an exception
           when called from outside the module.
@@ -52,7 +53,11 @@ function Sync-CallerPreference {
         ),
 
         # Additional variables to sync.
-        [string[]] $VariablesToSync = @()
+        [string[]] $VariablesToSync = @(),
+
+        # Indicates that a non-entry-point call should throw an exception instead
+        # of silently doing nothing.
+        [switch] $FailIfNotAnEntryPoint
     )
     $callstack = @($PSCmdlet.Host.Runspace.Debugger.GetCallStack())
     $callerScope = 1
@@ -67,12 +72,10 @@ function Sync-CallerPreference {
     # verify the caller is a module entry point, i.e., the caller's caller is not from this module
     $callersCaller = $callstack[$callerScope + 1].InvocationInfo
     if ((getLexicalModule $callersCaller) -eq $callerModule) {
-        if ($ErrorActionPreference -ne 'Ignore') {
-            Write-Error -Exception "$($MyInvocation.MyCommand.Name) must only be called from module entry points." `
-                -CategoryActivity $MyInvocation.MyCommand.Name `
-                -Category InvalidOperation `
-                -CategoryReason 'InvalidCaller'
+        if ($FailIfNotAnEntryPoint) {
+            throw "$($MyInvocation.MyCommand.Name) not called from a module entry point."
         }
+        Write-Verbose "$($MyInvocation.MyCommand.Name) not called from a module entry point. No preferences synced."
         return
     }
 

@@ -9,40 +9,6 @@
 
 param()
 
-function assertAppExists {
-    [CmdletBinding(PositionalBinding = $false)]
-    [OutputType([string])]
-    param(
-        [Parameter(Mandatory, Position = 0)]
-        [string] $AppPath,
-        [string] $AppTitle,
-        [switch] $PassThru
-    )
-
-    # Set the ErrorActionPreference to 'Stop' if not explicitly specified.
-    if (!$PSBoundParameters.ContainsKey('ErrorAction')) {
-        $ErrorActionPreference = 'Stop'
-    }
-
-    # When multiple commands with the same name are found, Get-Command returns
-    # them in execution precedence order. So take the first one
-    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore -TotalCount 1
-    if (!$cmd) {
-        if ($ErrorActionPreference -ne 'Ignore') {
-            $appName = $AppTitle ? "$AppTitle ($AppPath)" : $AppPath
-            Write-Error -Exception "$appName not found. Please bootstrap first using './build.ps1 bootstrap'." `
-                -CategoryActivity 'Assert-AppExists' `
-                -Category ObjectNotFound `
-                -CategoryReason 'AppNotFound' `
-                -TargetObject $AppPath
-        }
-        return
-    }
-    if ($PassThru) {
-        return $cmd.Path
-    }
-}
-
 function Assert-AppExists {
     <#
     .DESCRIPTION
@@ -71,5 +37,27 @@ function Assert-AppExists {
         [switch] $PassThru
     )
     Sync-CallerPreference -PreferencesToSync ErrorAction
-    assertAppExists @PSBoundParameters
+
+    # Set the ErrorActionPreference to 'Stop' if not explicitly specified.
+    if (!$PSBoundParameters.ContainsKey('ErrorAction')) {
+        $ErrorActionPreference = 'Stop'
+    }
+
+    # When multiple commands with the same name are found, Get-Command returns
+    # them in execution precedence order. So take the first one
+    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore -TotalCount 1
+    if (!$cmd) {
+        if ($ErrorActionPreference -ne 'Ignore') {
+            $appName = $AppTitle ? "$AppTitle ($AppPath)" : $AppPath
+            Write-Error -Exception "$appName not found. Please bootstrap first using './build.ps1 bootstrap'." `
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category ObjectNotFound `
+                -CategoryReason 'AppNotFound' `
+                -TargetObject $AppPath
+        }
+        return
+    }
+    if ($PassThru) {
+        return $cmd.Path
+    }
 }

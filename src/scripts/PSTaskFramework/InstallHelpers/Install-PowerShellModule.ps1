@@ -39,7 +39,6 @@ function Install-PowerShellModule {
         [ValidateSet('CurrentUser', 'AllUsers')]
         [string]$Scope = 'CurrentUser'
     )
-
     Sync-CallerPreference
 
     function tryGetModule([string]$Name, [version]$MinimumVersion) {

@@ -57,10 +57,9 @@ function Invoke-Shell {
         [ValidateNotNull()]
         [int[]] $AllowedExitCodes = @(0)
     )
-
     Sync-CallerPreference -PreferencesToSync ErrorAction, InformationAction
 
-    $cmdPath = assertAppExists $Command -PassThru
+    $cmdPath = Assert-AppExists $Command -PassThru
     $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArg $CommandArgs)"
     Write-Information "$($PSStyle.Dim)>> $cmdText$($PSStyle.Reset)"
 

@@ -486,7 +486,6 @@ function Install-RequiredApp {
         # If specified, the function will attempt to install required package managers.
         [switch] $InstallPackageManagers
     )
-
     Sync-CallerPreference
 
     # Validate that all apps have installation information, either provided
