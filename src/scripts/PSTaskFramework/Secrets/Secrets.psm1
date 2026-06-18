@@ -111,7 +111,11 @@ function Pop-Secret {
     process {
         $secrets = getState
         if (!$secrets.values.ContainsKey($Value)) {
-            Write-Error -Exception 'Secret not found.' -CategoryActivity 'Pop-Secret' -Category 'ObjectNotFound' -ErrorId 'SecretNotFound' -TargetObject $Value
+            Write-Error -Exception 'Secret not found.' `
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category ObjectNotFound `
+                -ErrorId 'SecretNotFound' `
+                -TargetObject $Value
             return
         }
         $n = ($secrets.values[$Value] -= 1)

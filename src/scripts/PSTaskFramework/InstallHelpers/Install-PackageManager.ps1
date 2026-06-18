@@ -228,7 +228,7 @@ function Install-PackageManager {
         }
         catch {
             # Keep trying remaining candidates; this cmdlet reports partial failures.
-            Write-Error -ErrorRecord $_ -CategoryActivity 'Install-PackageManager'
+            Write-Error -ErrorRecord $_ -CategoryActivity $MyInvocation.MyCommand.Name
         }
     }
 
@@ -245,7 +245,10 @@ function Install-PackageManager {
             }
         }
         if (!$installed.Count) {
-            Write-Error -Exception "Failed to install any supported package manager (tried $($otherSupportedPMs -join ', '))." -CategoryActivity 'Install-PackageManager'
+            Write-Error -Exception "Failed to install any supported package manager (tried $($otherSupportedPMs -join ', '))." `
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category ObjectNotFound `
+                -CategoryReason 'NoPackageManagerInstalled'
         }
     }
 

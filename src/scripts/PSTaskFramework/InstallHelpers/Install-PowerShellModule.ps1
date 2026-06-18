@@ -66,6 +66,6 @@ function Install-PowerShellModule {
         }
     }
     catch {
-        Write-Error -ErrorRecord $_ -CategoryActivity 'Install-PowerShellModule'
+        Write-Error -ErrorRecord $_ -CategoryActivity $MyInvocation.MyCommand.Name
     }
 }

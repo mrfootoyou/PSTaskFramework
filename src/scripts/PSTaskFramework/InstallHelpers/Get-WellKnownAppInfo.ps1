@@ -51,7 +51,11 @@ function Get-WellKnownAppInfo {
                 }
             }
             default {
-                Write-Error -Exception "App '$_' is not a well-known app." -CategoryActivity 'Get-WellKnownAppInfo'
+                Write-Error -Exception "App '$_' is not a well-known app." `
+                    -CategoryActivity $MyInvocation.MyCommand.Name `
+                    -Category ObjectNotFound `
+                    -CategoryReason 'AppNotFound' `
+                    -TargetObject $_
             }
         }
     }

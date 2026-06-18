@@ -71,7 +71,10 @@ function Invoke-Shell {
     if ($AllowedExitCodes.Count -gt 0 -and $global:LASTEXITCODE -notin $AllowedExitCodes) {
         if ($ErrorActionPreference -ne 'Ignore') {
             Write-Error -Exception "Command failed with exit code $global:LASTEXITCODE ($cmdText)." `
-                -CategoryActivity 'Invoke-Shell' -CategoryReason 'Non-zero exit code' -CategoryTargetName $Command
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category InvalidResult `
+                -CategoryReason 'NonZeroExitCode' `
+                -TargetObject $Command
         }
     }
 }

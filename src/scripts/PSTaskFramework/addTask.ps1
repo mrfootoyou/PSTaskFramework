@@ -34,7 +34,11 @@ function addTask {
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
     if ($TaskContext.AllTasks.Contains($Name)) {
-        Write-Error -Exception "A task with the name '$Name' already exists." -CategoryActivity 'Add task' -Category ResourceExists -TargetObject $Name
+        Write-Error -Exception "A task with the name '$Name' already exists." `
+            -CategoryActivity 'Add Task' `
+            -Category ResourceExists `
+            -CategoryReason 'TaskAlreadyExists' `
+            -TargetObject $Name
         return
     }
     $TaskContext.AllTasks[$Name] = [TaskDefinition]@{

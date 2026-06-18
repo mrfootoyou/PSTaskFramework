@@ -262,10 +262,6 @@ function Import-DotEnv {
     Sync-CallerPreference
     $null = $Prototype # avoid "unused parameter" warning
 
-    function writeError ([string]$msg) {
-        Write-Error -Exception $msg -CategoryActivity 'Import-DotEnv' @args
-    }
-
     function tryCreateFromPrototype ([string]$file) {
         # if Prototype includes a directory, use it as-is. Otherwise assume it is a file name
         # and look for the prototype file in the same directory as the target file...
@@ -283,7 +279,10 @@ function Import-DotEnv {
             $msg = "File not found at '$file'"
             if ($prototypeFile) { $msg += ", and prototype file not found at '$prototypeFile'" }
             $msg += '. Please create the file with the appropriate values.'
-            writeError $msg -Category ObjectNotFound -CategoryTargetName $file
+            Write-Error -Exception $msg -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category ObjectNotFound `
+                -CategoryReason 'FileNotFound' `
+                -TargetObject $file
             return
         }
 
@@ -311,7 +310,11 @@ function Import-DotEnv {
         }
     )
     if ($createdFile -and $CreationAction -eq 'Stop') {
-        writeError 'Created file from prototype. Please update any placeholder values and retry.'
+        Write-Error -Exception 'Created file from prototype. Please update any placeholder values and retry.' `
+            -CategoryActivity $MyInvocation.MyCommand.Name `
+            -Category OperationStopped `
+            -CategoryReason 'FileCreatedFromPrototype' `
+            -TargetObject $file
         return
     }
 

@@ -575,7 +575,10 @@ function Install-RequiredApp {
         }
 
         if ($unresolvedApps) {
-            Write-Error -Exception "No supported installation method for $($unresolvedApps -join ', '). Tried: $($packageManagers -join ', ')." -CategoryActivity 'Install-RequiredApp'
+            Write-Error -Exception "No supported installation method for $($unresolvedApps -join ', '). Tried: $($packageManagers -join ', ')." `
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category ObjectNotFound `
+                -CategoryReason 'NoSupportedInstallationMethod'
             break
         }
 
@@ -609,7 +612,10 @@ function Install-RequiredApp {
             '^brew(:.*)?$' { installWithBrew $apps $_ }
             '^script(:.*)?$' { installWithScript $apps $_ }
             default {
-                Write-Error -Exception "Unsupported installation method: $_." -CategoryActivity 'Install-RequiredApp'
+                Write-Error -Exception "Unsupported installation method: $_." `
+                    -CategoryActivity $MyInvocation.MyCommand.Name `
+                    -Category InvalidOperation `
+                    -CategoryReason 'UnsupportedInstallationMethod'
             }
         }
     }

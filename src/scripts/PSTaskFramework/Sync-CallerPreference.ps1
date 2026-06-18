@@ -69,7 +69,9 @@ function Sync-CallerPreference {
     if ((getLexicalModule $callersCaller) -eq $callerModule) {
         if ($ErrorActionPreference -ne 'Ignore') {
             Write-Error -Exception "$($MyInvocation.MyCommand.Name) must only be called from module entry points." `
-                -Category InvalidOperation -CategoryActivity $PSCmdlet.MyInvocation.MyCommand.Name
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category InvalidOperation `
+                -CategoryReason 'InvalidCaller'
         }
         return
     }

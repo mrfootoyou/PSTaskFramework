@@ -149,8 +149,9 @@ function Get-VariableFromOuterSession {
             }
             else {
                 Write-Error -Exception "Failed to find variable '$Name'." `
-                    -CategoryActivity $PSCmdlet.MyInvocation.MyCommand.Name `
+                    -CategoryActivity $MyInvocation.MyCommand.Name `
                     -Category ObjectNotFound `
+                    -CategoryReason 'VariableNotFound' `
                     -TargetObject $Name
             }
             return

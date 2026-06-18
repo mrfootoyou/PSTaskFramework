@@ -31,7 +31,11 @@ function readInput {
             Write-Warning "CI environment detected. Returning empty value for prompt '$Prompt'."
             return ''
         }
-        Write-Error -Exception 'Cannot read input in CI environment.' -CategoryActivity 'Read-Input'
+        Write-Error -Exception 'Cannot read input in CI environment.' `
+            -CategoryActivity 'Read-Input' `
+            -Category InvalidOperation `
+            -CategoryReason 'CIEnvironment' `
+            -TargetObject $Prompt
         return
     }
     if ($Secret) {
@@ -53,7 +57,11 @@ function readInput {
         $value = Read-Host $Prompt
     }
     if (!$value -and !$AllowEmpty) {
-        Write-Error -Exception 'No value provided.' -CategoryActivity 'Read-Input'
+        Write-Error -Exception 'No value provided.' `
+            -CategoryActivity 'Read-Input' `
+            -Category InvalidData `
+            -CategoryReason 'NoValueProvided' `
+            -TargetObject $Prompt
         return
     }
     return $value
@@ -82,6 +90,6 @@ function Read-Input {
         # If specified, reads the input without echoing it to the console.
         [switch] $Secret
     )
-    Sync-CallerPreference -PreferencesToSync ErrorAction, WarningAction
+    Sync-CallerPreferences -PreferencesToSync ErrorAction, WarningAction
     readInput @PSBoundParameters
 }
