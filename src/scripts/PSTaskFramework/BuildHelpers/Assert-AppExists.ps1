@@ -67,6 +67,6 @@ function Assert-AppExists {
         # If specified, the cmdlet will return the full path to the application if it exists.
         [switch] $PassThru
     )
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+    Sync-CallerPreference -PreferencesToSync ErrorAction
     assertAppExists @PSBoundParameters
 }

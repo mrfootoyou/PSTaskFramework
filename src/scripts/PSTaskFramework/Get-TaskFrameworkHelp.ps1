@@ -37,7 +37,7 @@ function Get-TaskFrameworkHelp {
         [ValidateNotNull()]
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     $helpTaskName = $TaskContext.HelpTaskName ?? $TaskContext.CurrentTask.Name ?? 'help'
     $buildScriptPath = $TaskContext.BuildScriptPath ?? (Get-Item './build.ps1')

@@ -32,7 +32,7 @@ function Add-TaskFrameworkDefaultTasks {
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
 
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync WarningAction, Verbose
+    Sync-CallerPreference
 
     switch ($Include.where{ !(getTask ($NameMap[$_] ?? $_) -ea Ignore -TaskContext $TaskContext) }) {
         'null' {
@@ -49,7 +49,8 @@ function Add-TaskFrameworkDefaultTasks {
                     Lists all tasks defined in the task framework along with their descriptions
                     and dependencies.
                 #>
-                Get-TaskFrameworkTasks |
+                getAllOrderedTasks |
+                Select-Object -ExpandProperty Values |
                 Format-Table Name, Description, DependsOn -AutoSize |
                 Out-Host
             }

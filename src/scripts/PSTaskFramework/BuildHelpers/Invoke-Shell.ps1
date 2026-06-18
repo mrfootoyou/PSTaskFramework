@@ -58,7 +58,7 @@ function Invoke-Shell {
         [int[]] $AllowedExitCodes = @(0)
     )
 
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, InformationAction
+    Sync-CallerPreference -PreferencesToSync ErrorAction, InformationAction
 
     $cmdPath = assertAppExists $Command -PassThru
     $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArg $CommandArgs)"

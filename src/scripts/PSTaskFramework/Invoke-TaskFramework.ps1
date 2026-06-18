@@ -95,7 +95,7 @@ function Invoke-TaskFramework {
         [ValidateNotNull()]
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
     $ErrorActionPreference = 'Stop'
     $null = $ExitOnError # avoid unused parameter warning
 

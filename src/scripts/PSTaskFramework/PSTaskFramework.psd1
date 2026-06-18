@@ -64,6 +64,8 @@
 
     # Modules to import as nested modules of the module specified in RootModule
     NestedModules        = @(
+        'Get-VariableFromOuterSession.ps1'
+        'Sync-CallerPreference.ps1'
         'Initialize-TaskFramework.ps1'
         'Get-TaskFrameworkContext.ps1'
         'Get-TaskFrameworkTasks.ps1'

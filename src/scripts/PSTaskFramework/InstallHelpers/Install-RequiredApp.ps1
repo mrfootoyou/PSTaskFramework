@@ -487,7 +487,7 @@ function Install-RequiredApp {
         [switch] $InstallPackageManagers
     )
 
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     # Validate that all apps have installation information, either provided
     # directly or via the well-known apps list...

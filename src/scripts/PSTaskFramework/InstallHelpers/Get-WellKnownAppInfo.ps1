@@ -30,7 +30,7 @@ function Get-WellKnownAppInfo {
         [string[]] $Name = @('*')
     )
     process {
-        & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+        Sync-CallerPreference -PreferencesToSync ErrorAction
 
         switch ($Name) {
             { $_.IndexOfAny([char[]]'*?[') -ge 0 } {

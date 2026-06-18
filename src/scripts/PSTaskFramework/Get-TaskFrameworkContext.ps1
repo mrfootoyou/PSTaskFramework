@@ -33,7 +33,7 @@ function Get-TaskFrameworkContext {
 
     # if not found, try from caller's session state...
     if ($null -eq $TaskContext -and $ExecutionContext.SessionState.Module) {
-        $TaskContext = $ExecutionContext.SessionState.Module.GetVariableFromCallersModule($Name).Value
+        $TaskContext = Get-VariableFromOuterSession $Name -ValueOnly -ErrorAction Ignore
     }
 
     if ($null -eq $TaskContext) {

@@ -259,7 +259,7 @@ function Import-DotEnv {
         # the cmdlet will add loaded variables to it as well.
         [System.Collections.IDictionary] $InterpolationVariables
     )
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
     $null = $Prototype # avoid "unused parameter" warning
 
     function writeError ([string]$msg) {

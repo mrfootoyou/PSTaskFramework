@@ -84,6 +84,6 @@ function Task {
         [ValidateNotNull()]
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, InformationAction
+    Sync-CallerPreference
     addTask @PSBoundParameters
 }

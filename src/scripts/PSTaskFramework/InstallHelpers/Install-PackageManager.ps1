@@ -190,7 +190,7 @@ function Install-PackageManager {
         [string[]] $PackageManager
     )
 
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     $PackageManager = @(
         $PackageManager |

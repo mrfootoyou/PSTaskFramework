@@ -40,7 +40,7 @@ function Install-PowerShellModule {
         [string]$Scope = 'CurrentUser'
     )
 
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     function tryGetModule([string]$Name, [version]$MinimumVersion) {
         Get-Module -Name $Name -ListAvailable -ea Ignore |

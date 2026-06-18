@@ -108,7 +108,7 @@ function Get-TaskFrameworkTasks {
         [ValidateNotNull()]
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+    Sync-CallerPreference
     try {
         return (getAllOrderedTasks @PSBoundParameters).Values
     }

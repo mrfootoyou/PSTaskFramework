@@ -15,31 +15,15 @@ function isContinuousIntegration {
     return $env:CI -in @('1', 'true')
 }
 
-function Read-Input {
-    <#
-    .DESCRIPTION
-        Reads a string value from the console. If running in a CI environment, returns
-        an empty string or throws an error, depending on the -AllowEmpty switch.
-
-        This is a lightweight wrapper around the built-in Read-Host cmdlet and adds
-        CI-awareness and optional support for reading secrets as strings.
-    .OUTPUTS
-        [System.String]
-        The value read from the console.
-    #>
+function readInput {
     [CmdletBinding()]
     [OutputType([string])]
     param(
-        # The prompt to display to the user
         [Parameter(Mandatory)]
         [string] $Prompt,
-        # If specified, allows an empty value to be returned. Otherwise, an error is thrown.
         [switch] $AllowEmpty,
-        # If specified, reads the input without echoing it to the console.
         [switch] $Secret
     )
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, WarningAction
-
     # Do not prompt in CI environments. Instead, return an empty string
     # or throw an error depending on the -AllowEmpty switch.
     if (isContinuousIntegration) {
@@ -73,4 +57,31 @@ function Read-Input {
         return
     }
     return $value
+}
+
+function Read-Input {
+    <#
+    .DESCRIPTION
+        Reads a string value from the console. If running in a CI environment, returns
+        an empty string or throws an error, depending on the -AllowEmpty switch.
+
+        This is a lightweight wrapper around the built-in Read-Host cmdlet and adds
+        CI-awareness and optional support for reading secrets as strings.
+    .OUTPUTS
+        [System.String]
+        The value read from the console.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        # The prompt to display to the user
+        [Parameter(Mandatory)]
+        [string] $Prompt,
+        # If specified, allows an empty value to be returned. Otherwise, an error is thrown.
+        [switch] $AllowEmpty,
+        # If specified, reads the input without echoing it to the console.
+        [switch] $Secret
+    )
+    Sync-CallerPreference -PreferencesToSync ErrorAction, WarningAction
+    readInput @PSBoundParameters
 }

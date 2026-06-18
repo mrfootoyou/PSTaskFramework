@@ -49,15 +49,15 @@ function Initialize-TaskFramework {
         [ValidateNotNullOrEmpty()]
         [string]$TaskContextVariableName = 'TaskContext'
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     if (!$BuildScriptPath) {
-        $callersInvocation = $ExecutionContext.SessionState.Module.GetVariableFromCallersModule("MyInvocation")
-        if (!$callersInvocation.Value.MyCommand.Path) {
+        $callersInvocation = Get-VariableFromOuterSession 'MyInvocation' -ValueOnly -ErrorAction Ignore
+        if (!$callersInvocation.MyCommand.Path) {
             Write-Error -Exception "Could not determine caller's script path. Please provide the path via the -BuildScriptPath parameter."
             return
         }
-        $BuildScriptPath = $callersInvocation.Value.MyCommand.Path
+        $BuildScriptPath = $callersInvocation.MyCommand.Path
     }
     if (!(Test-Path $BuildScriptPath -PathType Leaf)) {
         Write-Error -Exception "The specified build script path '$BuildScriptPath' does not exist."
