@@ -49,10 +49,8 @@ function Add-TaskFrameworkDefaultTasks {
                     Lists all tasks defined in the task framework along with their descriptions
                     and dependencies.
                 #>
-                getAllOrderedTasks |
-                Select-Object -ExpandProperty Values |
-                Format-Table Name, Description, DependsOn -AutoSize |
-                Out-Host
+                (getAllOrderedTasks).Values |
+                Select-Object Name, Description, DependsOn
             }
         }
         'help' {

@@ -70,16 +70,7 @@ Describe 'PSTaskFramework Module' {
                 Task 'task1' -Description 'described task 1' -DependsOn 'list' {}
                 Add-TaskFrameworkDefaultTasks -Include 'list'
 
-                $output = [System.Collections.Generic.List[object]]::new()
-                Mock Out-Host -ModuleName PSTaskFramework {
-                    $output.AddRange(@($InputObject))
-                }
-
-                Invoke-TaskFramework -TaskName 'list'
-            }
-
-            It 'should invoke Out-Host to display output' {
-                Should -Invoke Out-Host -ModuleName PSTaskFramework -Times 1
+                $script:output = Invoke-TaskFramework -TaskName 'list'
             }
 
             It 'lists all tasks with descriptions in dependency order' {
