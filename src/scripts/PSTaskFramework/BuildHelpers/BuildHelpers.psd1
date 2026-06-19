@@ -31,7 +31,7 @@
     PowerShellVersion    = '7.4'
 
     # Script module or binary module file associated with this manifest.
-    # RootModule           = 'BuildHelpers.psm1'
+    RootModule           = 'BuildHelpers.psm1'
 
     # Modules to import as nested modules of the module specified in RootModule
     NestedModules        = @(

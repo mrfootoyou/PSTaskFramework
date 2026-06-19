@@ -57,10 +57,9 @@ function Invoke-Shell {
         [ValidateNotNull()]
         [int[]] $AllowedExitCodes = @(0)
     )
+    Sync-CallerPreference -PreferencesToSync ErrorAction, InformationAction
 
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, InformationAction
-
-    $cmdPath = assertAppExists $Command -PassThru
+    $cmdPath = Assert-AppExists $Command -PassThru
     $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArg $CommandArgs)"
     Write-Information "$($PSStyle.Dim)>> $cmdText$($PSStyle.Reset)"
 
@@ -71,7 +70,10 @@ function Invoke-Shell {
     if ($AllowedExitCodes.Count -gt 0 -and $global:LASTEXITCODE -notin $AllowedExitCodes) {
         if ($ErrorActionPreference -ne 'Ignore') {
             Write-Error -Exception "Command failed with exit code $global:LASTEXITCODE ($cmdText)." `
-                -CategoryActivity 'Invoke-Shell' -CategoryReason 'Non-zero exit code' -CategoryTargetName $Command
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category InvalidResult `
+                -CategoryReason 'NonZeroExitCode' `
+                -TargetObject $Command
         }
     }
 }

@@ -33,7 +33,6 @@ function Read-Secret {
         # If specified, allows an empty value to be returned. Otherwise, an error is thrown.
         [switch] $AllowEmpty
     )
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, WarningAction
-
+    Sync-CallerPreference
     Read-Input -Secret @PSBoundParameters
 }

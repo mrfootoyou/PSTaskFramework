@@ -10,43 +10,6 @@
 using module .\PSTaskFramework.classes.psm1
 param()
 
-function addTask {
-    <#
-    .DESCRIPTION
-        Private implementation of the `Task` function that adds a task to the task framework.
-        This is separated from the public Task function to allow for easier error handling and
-        to avoid syncing caller preferences multiple times when adding multiple tasks.
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory, Position = 0)]
-        [string]$Name,
-        [Parameter(Mandatory, Position = 1)]
-        [AllowNull()]
-        [ScriptBlock]$Action,
-        [ValidateNotNull()]
-        [string]$Description,
-        [ValidateNotNull()]
-        [string[]]$DependsOn = @(),
-        [ValidateNotNull()]
-        [int[]]$AllowedExitCodes = @(0),
-        [ValidateNotNull()]
-        [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
-    )
-    if ($TaskContext.AllTasks.Contains($Name)) {
-        Write-Error -Exception "A task with the name '$Name' already exists." -CategoryActivity 'Add task' -Category ResourceExists -TargetObject $Name
-        return
-    }
-    $TaskContext.AllTasks[$Name] = [TaskDefinition]@{
-        Name             = $Name
-        Description      = $Description
-        DependsOn        = $DependsOn
-        AllowedExitCodes = $AllowedExitCodes
-        Action           = $Action
-    }
-    $TaskContext.AllTasksSorted = $false
-}
-
 function Task {
     <#
     .DESCRIPTION
@@ -84,6 +47,22 @@ function Task {
         [ValidateNotNull()]
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, InformationAction
-    addTask @PSBoundParameters
+    Sync-CallerPreference
+
+    if ($TaskContext.AllTasks.Contains($Name)) {
+        Write-Error -Exception "A task with the name '$Name' already exists." `
+            -CategoryActivity 'Add Task' `
+            -Category ResourceExists `
+            -CategoryReason 'TaskAlreadyExists' `
+            -TargetObject $Name
+        return
+    }
+    $TaskContext.AllTasks[$Name] = [TaskDefinition]@{
+        Name             = $Name
+        Description      = $Description
+        DependsOn        = $DependsOn
+        AllowedExitCodes = $AllowedExitCodes
+        Action           = $Action
+    }
+    $TaskContext.AllTasksSorted = $false
 }

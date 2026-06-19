@@ -95,7 +95,7 @@ function Invoke-TaskFramework {
         [ValidateNotNull()]
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
     $ErrorActionPreference = 'Stop'
     $null = $ExitOnError # avoid unused parameter warning
 
@@ -125,6 +125,9 @@ function Invoke-TaskFramework {
 
     if (!$WorkingDirectory) {
         $WorkingDirectory = $TaskContext.BuildScriptPath.DirectoryName
+        if (!$WorkingDirectory) {
+            throw 'Specify the default working directory using the -WorkingDirectory parameter.'
+        }
     }
     elseif (!(Test-Path $WorkingDirectory -PathType Container)) {
         throw "The specified working directory '$WorkingDirectory' does not exist."

@@ -14,6 +14,10 @@ param(
     [string] $SecretScope = 'Global'
 )
 
+# We cant put these in the manifest because of the '../' in the path
+. "$PSScriptRoot/../Get-VariableFromOuterSession.ps1"
+. "$PSScriptRoot/../Sync-CallerPreference.ps1"
+
 if ($SecretScope -eq 'Local') {
     $script:secrets = [PSCustomObject]@{
         values = [System.Collections.Generic.Dictionary[string, int]]::new([System.StringComparer]::Ordinal)
@@ -102,12 +106,16 @@ function Pop-Secret {
         [string]$Value
     )
     begin {
-        & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+        Sync-CallerPreference
     }
     process {
         $secrets = getState
         if (!$secrets.values.ContainsKey($Value)) {
-            Write-Error -Exception 'Secret not found.' -CategoryActivity 'Pop-Secret' -Category 'ObjectNotFound' -ErrorId 'SecretNotFound' -TargetObject $Value
+            Write-Error -Exception 'Secret not found.' `
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category ObjectNotFound `
+                -ErrorId 'SecretNotFound' `
+                -TargetObject $Value
             return
         }
         $n = ($secrets.values[$Value] -= 1)

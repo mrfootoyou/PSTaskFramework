@@ -30,7 +30,7 @@ function Get-WellKnownAppInfo {
         [string[]] $Name = @('*')
     )
     process {
-        & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+        Sync-CallerPreference -PreferencesToSync ErrorAction
 
         switch ($Name) {
             { $_.IndexOfAny([char[]]'*?[') -ge 0 } {
@@ -51,7 +51,11 @@ function Get-WellKnownAppInfo {
                 }
             }
             default {
-                Write-Error -Exception "App '$_' is not a well-known app." -CategoryActivity 'Get-WellKnownAppInfo'
+                Write-Error -Exception "App '$_' is not a well-known app." `
+                    -CategoryActivity $MyInvocation.MyCommand.Name `
+                    -Category ObjectNotFound `
+                    -CategoryReason 'AppNotFound' `
+                    -TargetObject $_
             }
         }
     }

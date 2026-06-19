@@ -25,8 +25,8 @@ Describe 'PSTaskFramework Module' {
         }
 
         It 'throws an error when context variable is not found' {
-            { Get-TaskFrameworkContext -Name ([guid]::NewGuid().ToString('n')) } |
-            Should -Throw "Task context variable '*' not found*"
+            { Get-TaskFrameworkContext -Name 'nonexistent context' } |
+            Should -Throw "Task context variable 'nonexistent context' not found*"
         }
 
         It 'throws an error when context variable is not a TaskContext' {

@@ -21,7 +21,11 @@ function getTask {
     )
 
     if (!$TaskContext.AllTasks.Contains($TaskName)) {
-        Write-Error -Exception "Task '$TaskName' not found." -CategoryActivity 'Get task' -Category ObjectNotFound -TargetObject $TaskName
+        Write-Error -Exception "Task '$TaskName' not found." `
+            -CategoryActivity 'Get-Task' `
+            -Category ObjectNotFound `
+            -CategoryReason 'TaskNotFound' `
+            -TargetObject $TaskName
         return
     }
     return $TaskContext.AllTasks[$TaskName]
@@ -108,11 +112,11 @@ function Get-TaskFrameworkTasks {
         [ValidateNotNull()]
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+    Sync-CallerPreference
     try {
         return (getAllOrderedTasks @PSBoundParameters).Values
     }
     catch {
-        Write-Error -Exception $_ -CategoryActivity 'Get-TaskFrameworkTasks' -Category InvalidOperation
+        Write-Error -Exception $_ -CategoryActivity $MyInvocation.MyCommand.Name
     }
 }

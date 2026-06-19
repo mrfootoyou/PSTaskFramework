@@ -486,8 +486,7 @@ function Install-RequiredApp {
         # If specified, the function will attempt to install required package managers.
         [switch] $InstallPackageManagers
     )
-
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     # Validate that all apps have installation information, either provided
     # directly or via the well-known apps list...
@@ -575,7 +574,10 @@ function Install-RequiredApp {
         }
 
         if ($unresolvedApps) {
-            Write-Error -Exception "No supported installation method for $($unresolvedApps -join ', '). Tried: $($packageManagers -join ', ')." -CategoryActivity 'Install-RequiredApp'
+            Write-Error -Exception "No supported installation method for $($unresolvedApps -join ', '). Tried: $($packageManagers -join ', ')." `
+                -CategoryActivity $MyInvocation.MyCommand.Name `
+                -Category ObjectNotFound `
+                -CategoryReason 'NoSupportedInstallationMethod'
             break
         }
 
@@ -609,7 +611,10 @@ function Install-RequiredApp {
             '^brew(:.*)?$' { installWithBrew $apps $_ }
             '^script(:.*)?$' { installWithScript $apps $_ }
             default {
-                Write-Error -Exception "Unsupported installation method: $_." -CategoryActivity 'Install-RequiredApp'
+                Write-Error -Exception "Unsupported installation method: $_." `
+                    -CategoryActivity $MyInvocation.MyCommand.Name `
+                    -Category InvalidOperation `
+                    -CategoryReason 'UnsupportedInstallationMethod'
             }
         }
     }

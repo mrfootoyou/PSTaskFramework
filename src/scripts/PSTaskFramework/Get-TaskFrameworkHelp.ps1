@@ -37,15 +37,18 @@ function Get-TaskFrameworkHelp {
         [ValidateNotNull()]
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     $helpTaskName = $TaskContext.HelpTaskName ?? $TaskContext.CurrentTask.Name ?? 'help'
-    $buildScriptPath = $TaskContext.BuildScriptPath ?? (Get-Item './build.ps1')
+    $buildScriptPath = $TaskContext.BuildScriptPath
     $taskNameArgName = $TaskContext.TaskNameArgName ?? 'TaskName'
     $taskArgsArgName = $TaskContext.TaskArgsArgName ?? 'TaskArgs'
 
     # Get the help info for the build script. We will merge it's parameters and syntax
     # with the task help info to produce the final help output.
+    if (!$buildScriptPath) {
+        throw 'The build script path is not available. Specify it when calling Initialize-TaskFramework.'
+    }
     $buildHelp = Get-Help -Name $buildScriptPath @GetHelpArgs
     if (!$buildHelp) { return }
 

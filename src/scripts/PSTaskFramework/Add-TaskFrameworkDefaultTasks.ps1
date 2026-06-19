@@ -32,33 +32,32 @@ function Add-TaskFrameworkDefaultTasks {
         [TaskContext]$TaskContext = (Get-TaskFrameworkContext)
 
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync WarningAction, Verbose
+    Sync-CallerPreference
 
     switch ($Include.where{ !(getTask ($NameMap[$_] ?? $_) -ea Ignore -TaskContext $TaskContext) }) {
         'null' {
             $name = $NameMap[$_] ?? $_
             Write-Verbose "Including default 'null' task as '$name'."
-            addTask $name -Description 'An empty task that does nothing.' -TaskContext $TaskContext -Action $null
+            Task $name -Description 'An empty task that does nothing.' -TaskContext $TaskContext -Action $null
         }
         'list' {
             $name = $NameMap[$_] ?? $_
             Write-Verbose "Including default 'list' task as '$name'."
-            addTask $name -Description 'List all defined tasks' -TaskContext $TaskContext {
+            Task $name -Description 'List all defined tasks' -TaskContext $TaskContext {
                 <#
                 .DESCRIPTION
                     Lists all tasks defined in the task framework along with their descriptions
                     and dependencies.
                 #>
-                Get-TaskFrameworkTasks |
-                Format-Table Name, Description, DependsOn -AutoSize |
-                Out-Host
+                (getAllOrderedTasks).Values |
+                Select-Object Name, Description, DependsOn
             }
         }
         'help' {
             $name = $NameMap[$_] ?? $_
             Write-Verbose "Including default 'help' task as '$name'."
             $TaskContext.HelpTaskName = $name
-            addTask $name -Description 'Show detailed help for a task' -TaskContext $TaskContext {
+            Task $name -Description 'Show detailed help for a task' -TaskContext $TaskContext {
                 <#
                 .DESCRIPTION
                     Generates help for a task defined in the task framework. If a task name is not

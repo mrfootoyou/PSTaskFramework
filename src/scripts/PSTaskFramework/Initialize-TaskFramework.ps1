@@ -49,23 +49,26 @@ function Initialize-TaskFramework {
         [ValidateNotNullOrEmpty()]
         [string]$TaskContextVariableName = 'TaskContext'
     )
-    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     if (!$BuildScriptPath) {
-        $callersInvocation = $ExecutionContext.SessionState.Module.GetVariableFromCallersModule("MyInvocation")
-        if (!$callersInvocation.Value.MyCommand.Path) {
-            Write-Error -Exception "Could not determine caller's script path. Please provide the path via the -BuildScriptPath parameter."
-            return
+        # Get the caller's $MyInvocation to determine the build script path
+        $callersInvocation = Get-VariableFromOuterSession 'MyInvocation' -ValueOnly -ErrorAction SilentlyContinue
+        if ($callersInvocation.MyCommand.CommandType -eq 'ExternalScript') {
+            $BuildScriptPath = $callersInvocation.MyCommand.Path
         }
-        $BuildScriptPath = $callersInvocation.Value.MyCommand.Path
     }
-    if (!(Test-Path $BuildScriptPath -PathType Leaf)) {
-        Write-Error -Exception "The specified build script path '$BuildScriptPath' does not exist."
+    if ($BuildScriptPath -and !(Test-Path $BuildScriptPath -PathType Leaf)) {
+        Write-Error -Exception "The specified build script path '$BuildScriptPath' does not exist." `
+            -CategoryActivity $MyInvocation.MyCommand.Name `
+            -Category ObjectNotFound `
+            -CategoryReason 'BuildScriptPathNotFound' `
+            -TargetObject $BuildScriptPath
         return
     }
 
     $TaskContext = [TaskContext]@{
-        BuildScriptPath = Get-Item $BuildScriptPath -Force
+        BuildScriptPath = $BuildScriptPath ? (Get-Item $BuildScriptPath -Force) : $null
         TaskNameArgName = $TaskNameArgName
         TaskArgsArgName = $TaskArgsArgName
     }

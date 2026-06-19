@@ -39,8 +39,7 @@ function Install-PowerShellModule {
         [ValidateSet('CurrentUser', 'AllUsers')]
         [string]$Scope = 'CurrentUser'
     )
-
-    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+    Sync-CallerPreference
 
     function tryGetModule([string]$Name, [version]$MinimumVersion) {
         Get-Module -Name $Name -ListAvailable -ea Ignore |
@@ -66,6 +65,6 @@ function Install-PowerShellModule {
         }
     }
     catch {
-        Write-Error -ErrorRecord $_ -CategoryActivity 'Install-PowerShellModule'
+        Write-Error -ErrorRecord $_ -CategoryActivity $MyInvocation.MyCommand.Name
     }
 }
