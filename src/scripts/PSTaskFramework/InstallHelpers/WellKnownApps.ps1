@@ -1,4 +1,6 @@
 <#
+.SYNOPSIS
+    Part of the PSTaskFramework.
 .DESCRIPTION
     Well-known applications metadata for installation helpers.
 .NOTES

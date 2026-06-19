@@ -36,8 +36,7 @@ Install PowerShell: [https://aka.ms/install-powershell](https://aka.ms/install-p
 
 ### Copy the Framework into Your Repo
 
-Copy everything from the [`src`](src/) folder into the **root** of your repository. You may omit the
-test files.
+Copy everything from the [`src`](src/) folder into the **root** of your repository.
 
 Your repo structure should look something like this:
 
@@ -46,8 +45,7 @@ Your repo structure should look something like this:
 ├── build.ps1  <== the entrypoint
 └── scripts/
     └── PSTaskFramework/  <== the framework
-        ├── ...
-        └── <test files can be omitted>
+        └── ...
 ```
 
 > **NOTE:** The `PSTaskFramework` folder can be located elsewhere if desired, just update the
@@ -387,19 +385,19 @@ to visualize code coverage in your editor.
 
 If you want to understand or modify core behavior, these are the files to look at:
 
-- [`src/scripts/PSTaskFramework/PSTaskFramework.psm1`](src/scripts/PSTaskFramework/PSTaskFramework.psm1)
+- [`src/scripts/PSTaskFramework/`](src/scripts/PSTaskFramework/)
   - Task registration
   - Dependency ordering
   - Default tasks
   - Core execution engine
-- [`src/scripts/PSTaskFramework/BuildHelpers/BuildHelpers.psm1`](src/scripts/PSTaskFramework/BuildHelpers/BuildHelpers.psm1)
+- [`src/scripts/PSTaskFramework/BuildHelpers/`](src/scripts/PSTaskFramework/BuildHelpers/)
   - Helpers related to execution
-- [`src/scripts/PSTaskFramework/PSArgs/PSArgs.psm1`](src/scripts/PSTaskFramework/PSArgs/PSArgs.psm1)
+- [`src/scripts/PSTaskFramework/PSArgs/`](src/scripts/PSTaskFramework/PSArgs/)
   - PowerShell argument conversion helpers
-- [`src/scripts/PSTaskFramework/Secrets/Secrets.psm1`](src/scripts/PSTaskFramework/Secrets/Secrets.psm1)
+- [`src/scripts/PSTaskFramework/Secrets/`](src/scripts/PSTaskFramework/Secrets/)
   - CI-aware secret input
   - Secret masking
-- [`src/scripts/PSTaskFramework/InstallHelpers/InstallHelpers.psm1`](src/scripts/PSTaskFramework/InstallHelpers/InstallHelpers.psm1)
+- [`src/scripts/PSTaskFramework/InstallHelpers/`](src/scripts/PSTaskFramework/InstallHelpers/)
   - Application installation helpers
   - PowerShell module installation helpers
 
