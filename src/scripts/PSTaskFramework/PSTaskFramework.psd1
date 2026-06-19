@@ -69,7 +69,7 @@
         'Initialize-TaskFramework.ps1'
         'Get-TaskFrameworkContext.ps1'
         'Get-TaskFrameworkTasks.ps1'
-        'addTask.ps1'
+        'Task.ps1'
         'Add-TaskFrameworkDefaultTasks.ps1'
         'Get-TaskFrameworkHelp.ps1'
         'Invoke-Task.ps1'
