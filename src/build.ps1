@@ -30,7 +30,7 @@
     Source: http://github.com/mrfootoyou/pstaskframework
 #>
 #Requires -Version 7.4
-# spell:ignore dont,winget,choco
+# spell:ignore dont
 
 [Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedParameter', '')]
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidGlobalVars', 'global:LastTaskContext')]
