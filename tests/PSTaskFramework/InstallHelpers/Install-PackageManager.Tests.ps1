@@ -112,6 +112,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
             InModuleScope 'InstallHelpers' {
                 $script:wingetInstalled = $false
                 Mock -Verifiable Get-Command -param { $name -eq 'winget' } { $script:wingetInstalled ? @{Path = 'C:\winget.exe' } : $null }
+                Mock -Verifiable Get-Command -param { $name -eq 'Get-AppxPackage' } { @{ } }
                 Mock -Verifiable Get-AppxPackage { [PSCustomObject]@{ PackageFamilyName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe' } }
                 Mock -Verifiable Add-AppxPackage { }
                 Mock -Verifiable refreshEnvironment { $script:wingetInstalled = $true }
@@ -119,7 +120,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 installWinget
 
                 Should -InvokeVerifiable
-                Should -Invoke Get-Command -Times 3 -Exactly
+                Should -Invoke Get-Command -Times 4 -Exactly
             }
         }
 
@@ -137,6 +138,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
         It 'should fail when App Installer package not found' -Skip:(-not $IsWindows) {
             InModuleScope 'InstallHelpers' {
                 Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'winget' } { $null }
+                Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'Get-AppxPackage' } { @{} }
                 Mock -Verifiable Get-AppxPackage { }
 
                 { installWinget } | Should -Throw '*Install ''App Installer'' from the Microsoft Store*'
@@ -148,6 +150,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
         It 'should fail when Add-AppxPackage fails' -Skip:(-not $IsWindows) {
             InModuleScope 'InstallHelpers' {
                 Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'winget' } { $null }
+                Mock -Verifiable Get-Command -ParameterFilter { $name -eq 'Get-AppxPackage' } { @{} }
                 Mock -Verifiable Get-AppxPackage { [PSCustomObject]@{ PackageFamilyName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe' } }
                 Mock -Verifiable Add-AppxPackage { Write-Error "failed" }
 
