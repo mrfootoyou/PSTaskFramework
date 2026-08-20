@@ -17,7 +17,8 @@ function Get-WellKnownAppInfo {
     .OUTPUTS
         [PSObject] with properties:
         - Name: the app name that was looked up
-        - Info: the metadata dictionary for the app
+        - Info: the metadata dictionary for the app. This is a shallow copy of the
+          original metadata. Do not _modify_ property values (add, remove, replace is okay).
     #>
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([PSObject])]
@@ -40,14 +41,14 @@ function Get-WellKnownAppInfo {
                 ForEach-Object {
                     [PSCustomObject]@{
                         Name = $_.Key
-                        Info = $_.Value
+                        Info = [ordered]@{} + $_.Value # shallow copy
                     }
                 }
             }
             { $WellKnownApps.Contains($_) } {
                 [PSCustomObject]@{
                     Name = $_
-                    Info = $WellKnownApps[$_]
+                    Info = [ordered]@{} + $WellKnownApps[$_] # shallow copy
                 }
             }
             default {
