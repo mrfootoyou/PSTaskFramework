@@ -56,6 +56,18 @@ $WellKnownApps = [ordered]@{
         'brew:macos'   = '--cask', 'docker-desktop'
         'script:linux' = { installDockerLinux @args }
     }
+    'nvs'           = [ordered]@{
+        # Node.js Version Switcher
+        website        = 'https://github.com/jasongin/nvs'
+        version        = { nvs --version }
+        winget         = 'jasongin.nvs'
+        choco          = 'nvs'
+        'script:linux' = { installNvsLinuxAndMacos @args }
+        'script:macos' = { installNvsLinuxAndMacos @args }
+        # data         = @{
+        #     NvsHome = "$env:HOME/.nvs"
+        # }
+    }
 }
 
 function script:isPowerShellUpToDate {
@@ -109,4 +121,12 @@ function script:installDockerLinux {
     finally {
         if (Test-Path $script) { Remove-Item $script -ErrorAction SilentlyContinue }
     }
+}
+
+function installNvsLinuxAndMacos {
+    param($appName, $appInfo)
+    $env:NVS_HOME = $appInfo.data.NvsHome ?? $env:NVS_HOME ?? "$env:HOME/.nvs"
+    Invoke-Shell -- git clone https://github.com/jasongin/nvs $env:NVS_HOME
+    Invoke-Shell -- "$env:NVS_HOME/nvs.sh" install
+    $env:PATH = "$env:NVS_HOME:$env:PATH"
 }
