@@ -45,7 +45,7 @@ function Assert-AppExists {
 
     # When multiple commands with the same name are found, Get-Command returns
     # them in execution precedence order. So take the first one
-    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore -TotalCount 1
+    $cmd = Get-Command $AppPath -CommandType Application, ExternalScript -ea Ignore -TotalCount 1
     if (!$cmd) {
         if ($ErrorActionPreference -ne 'Ignore') {
             $appName = $AppTitle ? "$AppTitle ($AppPath)" : $AppPath

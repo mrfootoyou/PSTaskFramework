@@ -14,7 +14,7 @@ Describe 'PSTaskFramework.BuildHelpers Module' {
 
     Context 'Assert-AppExists' {
         It 'returns first discovered application source path with PassThru' {
-            Mock Get-Command -ModuleName BuildHelpers -ParameterFilter { $Name -eq 'git' -and $CommandType -eq 'Application' -and $TotalCount -eq 1 } {
+            Mock Get-Command -ModuleName BuildHelpers -ParameterFilter { $Name -eq 'git' -and "$CommandType" -eq 'ExternalScript, Application' -and $TotalCount -eq 1 } {
                 @(
                     [PSCustomObject]@{ Path = '/mock/bin/git' }
                 )
