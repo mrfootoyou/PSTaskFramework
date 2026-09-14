@@ -73,6 +73,7 @@
         'Add-TaskFrameworkDefaultTasks.ps1'
         'Get-TaskFrameworkHelp.ps1'
         'Invoke-Task.ps1'
+        'Invoke-TaskAsAdministrator.ps1'
         'Invoke-TaskFramework.ps1'
     )
 
@@ -104,6 +105,7 @@
         'Invoke-TaskFramework'
         'Get-TaskFrameworkHelp'
         'Add-TaskFrameworkDefaultTasks'
+        'Invoke-TaskAsAdministrator'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
