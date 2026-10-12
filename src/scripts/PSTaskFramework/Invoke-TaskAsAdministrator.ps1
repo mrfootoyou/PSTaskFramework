@@ -50,7 +50,12 @@ function Invoke-TaskAsAdministrator {
         # Arguments for the task. Defaults to the current task's arguments when the TaskName
         # is not specified, otherwise an empty array.
         [ValidateNotNull()]
-        [string[]] $TaskArgs
+        [string[]] $TaskArgs,
+        # Environment variables to pass to the elevated session. Can be an array of variable
+        # names or a dictionary of name-value pairs. Values must be string or $null ($null will
+        # remove the variable from the elevated session).
+        [ValidateNotNull()]
+        [object] $EnvVars = @{}
     )
     Sync-CallerPreference
 
@@ -64,56 +69,103 @@ function Invoke-TaskAsAdministrator {
     }
     $TaskArgs ??= @()
 
-    Write-Host 'Running task with elevated privileges. Follow instructions in the UAC prompt...'
+    # Normalize EnvVars by converting to a hashtable of name-value pairs.
+    if ($EnvVars -is [string]) { $EnvVars = @($EnvVars) }
+    if ($EnvVars -is [System.Collections.IList]) {
+        # Convert list of environment variable names to a hashtable of name-value pairs.
+        $keys = $EnvVars
+        $EnvVars = @{}
+        foreach ($key in $keys) {
+            $var = Get-Item -LiteralPath "env:$key" -ErrorAction Ignore
+            $EnvVars[$key] = $var.Value # string or $null
+        }
+    }
+    if ($EnvVars -isnot [System.Collections.IDictionary]) {
+        throw 'EnvVars must be a hashtable or a list of environment variable names.'
+    }
+
+    # Script block to execute as an administrator. All inputs must be passed as
+    # parameters since this will execute in a different process.
     $adminScriptBlock = {
         param(
             [string] $BuildScriptPath,
             [string] $TaskName,
             [object[]] $TaskArgs,
-            [bool] $DoNotWaitForKeyPress,
-            [hashtable] $ExtraScriptArgs
+            [switch] $DoNotWaitForKeyPress,
+            [hashtable] $ExtraScriptArgs,
+            [hashtable] $EnvVars
         )
-        Write-Verbose "Executing: '$BuildScriptPath' $TaskName -TaskArgs $(ConvertTo-PSString $TaskArgs) -SkipDependencies @$(ConvertTo-PSString $ExtraScriptArgs)"
+        # Set environment variables for the elevated session.
+        foreach ($key in $EnvVars.Keys) {
+            if ($null -ne $EnvVars[$key]) {
+                Write-Verbose "Setting environment variable '$key' = '$($EnvVars[$key])'"
+                $null = New-Item "env:$key" -Value $EnvVars[$key] -Force
+            }
+            else {
+                Write-Verbose "Removing environment variable '$key'"
+                Remove-Item "env:$key" -ErrorAction Ignore
+            }
+        }
+        $buildScriptArgs = @{
+            TaskName         = $TaskName
+            TaskArgs         = $TaskArgs
+            SkipDependencies = $true
+        }
+        Write-Verbose "Executing: '$BuildScriptPath' $(ConvertTo-CommandArg $buildScriptArgs) $(ConvertTo-CommandArg $ExtraScriptArgs)"
         try {
+            $global:LASTEXITCODE = 0
             $LastTaskContext = $null
-            & $BuildScriptPath -TaskName $TaskName -TaskArgs $TaskArgs -SkipDependencies @ExtraScriptArgs
+            & $BuildScriptPath @buildScriptArgs @ExtraScriptArgs
         }
-        finally {
-            $exitCode = $global:LASTEXITCODE
-            if ($LastTaskContext) {
-                $LastTaskContext | Out-Host
-                if ($LastTaskContext.Results.ContainsKey($TaskName)) {
-                    $LastTaskContext.Results[$TaskName] | Out-Host
-                    $exitCode = $LastTaskContext.Results[$TaskName].ExitCode ?? $exitCode
-                }
+        catch {
+            if ($global:LASTEXITCODE -eq 0) {
+                $global:LASTEXITCODE = -1
             }
-            if (!$DoNotWaitForKeyPress) {
-                Write-Host 'Press any key to continue...' -NoNewline
-                $null = [System.Console]::ReadKey()
-            }
-            exit $exitCode
+            Write-Error -ErrorRecord $_ -ea Continue
         }
+        $exitCode = $global:LASTEXITCODE
+        # check for a task-specific exit code...
+        if ($LastTaskContext) {
+            $exitCode = $LastTaskContext.ExitCode ?? $exitCode
+            if ($LastTaskContext.Results -and $LastTaskContext.Results.ContainsKey($TaskName)) {
+                $exitCode = $LastTaskContext.Results[$TaskName].ExitCode ?? $exitCode
+            }
+        }
+        if (!$DoNotWaitForKeyPress) {
+            Write-Host 'Press any key to continue...' -NoNewline
+            $null = [System.Console]::ReadKey()
+        }
+        exit $exitCode
     }
-    $adminScriptArgs = @(
-        '-BuildScriptPath', $TaskContext.BuildScriptPath
-        '-TaskName', $TaskName
-        '-TaskArgs', $TaskArgs
-        '-DoNotWaitForKeyPress', $DoNotWaitForKeyPress
-        '-ExtraScriptArgs', $ExtraScriptArgs
+    $adminScriptArgs = @{
+        TaskName             = $TaskName
+        TaskArgs             = $TaskArgs
+        BuildScriptPath      = $TaskContext.BuildScriptPath
+        ExtraScriptArgs      = $ExtraScriptArgs
+        EnvVars              = $EnvVars
+        DoNotWaitForKeyPress = $DoNotWaitForKeyPress
+    }
+
+    # Import before setting verbose preference to avoid a bunch of verbose output
+    $command = @(
+        "Import-Module '$PSScriptRoot'"
+        "`$VerbosePreference = '$VerbosePreference'"
+        "function adminTask {$adminScriptBlock}"
+        "adminTask $(ConvertTo-CommandArg $adminScriptArgs)"
+    ) -join "`n"
+
+    $pwshArgs = @(
+        '-nologo'
+        '-noprofile'
+        '-executionpolicy', 'bypass'
+        '-encodedcommand', [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
     )
 
-    $command = @"
-Import-Module '$PSScriptRoot' # before setting verbose preference to avoid a bunch of verbose output
-`$VerbosePreference = '$VerbosePreference'
-function adminTask {$adminScriptBlock}
-adminTask $(ConvertTo-CommandArg $adminScriptArgs)
-"@
-
+    Write-Host 'Running task with elevated privileges. Follow instructions in the UAC prompt...'
     Write-Verbose "Starting elevated task with command:`n$command"
-    # return
     $ps = Start-Process `
         -FilePath (Get-Process -Id $PID).Path `
-        -ArgumentList "-nologo -nop -ep bypass -ec $([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command)))" `
+        -ArgumentList $pwshArgs `
         -WorkingDirectory $TaskContext.WorkingDirectory `
         -Verb RunAs `
         -Wait `
